@@ -122,6 +122,57 @@ let testNestedCatching() =
     require (caughtInner = 1) "didn't catch inner"
     require (caughtOuter = 2) "didn't catch outer"
 
+let testTryFinallyHappyPath() =
+    let mutable ran = false
+    let t =
+        task {
+            try
+                require (not ran) "ran way early"
+                do! Task.Delay(100)
+                require (not ran) "ran kinda early"
+            finally
+                ran <- true
+        }
+    t.Wait()
+    require ran "never ran"
+
+let testTryFinallySadPath() =
+    let mutable ran = false
+    let t =
+        task {
+            try
+                require (not ran) "ran way early"
+                do! Task.Delay(100)
+                require (not ran) "ran kinda early"
+                failtest "uhoh"
+            finally
+                ran <- true
+        }
+    try
+        t.Wait()
+    with
+    | _ -> ()
+    require ran "never ran"
+
+let testTryFinallyCaught() =
+    let mutable ran = false
+    let t =
+        task {
+            try
+                try
+                    require (not ran) "ran way early"
+                    do! Task.Delay(100)
+                    require (not ran) "ran kinda early"
+                    failtest "uhoh"
+                finally
+                    ran <- true
+                return 1
+            with
+            | _ -> return 2
+        }
+    require (t.Result = 2) "wrong return"
+    require ran "never ran"
+
 [<EntryPoint>]
 let main argv =
     testDelay()
@@ -130,4 +181,7 @@ let main argv =
     testCatching1()
     testCatching2()
     testNestedCatching()
+    testTryFinallyHappyPath()
+    testTryFinallySadPath()
+    testTryFinallyCaught()
     0
