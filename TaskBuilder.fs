@@ -40,33 +40,54 @@ type Step<'a, 'm> =
     end
 and StepAwaiter<'a, 'm> =
     struct
-        val mutable public Awaiter : TaskAwaiter
+        val mutable public Await : StepStateMachine<'m> -> bool
         val mutable public NextStep : unit -> Step<'a, 'm>
-        new(awaiter, nextStep) = { Awaiter = awaiter; NextStep = nextStep }
+        new(await, nextStep) = { Await = await; NextStep = nextStep }
     end
 and StepStateMachine<'m>(step : Step<'m, 'm>) =
     let mutable methodBuilder = AsyncTaskMethodBuilder<'m>()
     let mutable step = step
-    let mutable awaiter = Unchecked.defaultof<StepAwaiter<'m, 'm>>
+    let mutable nextStep = Unchecked.defaultof<_>
     let mutable awaiting = false
+    let mutable faulted = false
     member this.Run() =
         let mutable this = this
         methodBuilder.Start(&this)
         methodBuilder.Task
+
+    member this.Await(awaitable : 'await when 'await :> INotifyCompletion) =
+        awaiting <- true
+        let mutable this = this
+        let mutable awaiter = awaitable
+        methodBuilder.AwaitOnCompleted(&awaiter, &this)
+        false
     member this.MoveNext() =
         if awaiting then
-            step <- awaiter.NextStep()
-        if isNull (box step.Continuation) then
+            awaiting <- false
+            step <-
+                try nextStep() with
+                | exn -> 
+                    methodBuilder.SetException(exn)
+                    faulted <- true
+                    Step<'m, 'm>.OfImmediate(Unchecked.defaultof<_>)
+        if faulted then
+            ()
+        elif isNull (box step.Continuation) then
             methodBuilder.SetResult(step.ImmediateValue)
         else
-            awaiter <- step.Continuation()
-            if awaiter.Awaiter.IsCompleted then
-                step <- awaiter.NextStep()
+            let moveNext =
+                try
+                    let stepAwaiter = step.Continuation()
+                    awaiting <- true
+                    nextStep <- stepAwaiter.NextStep
+                    stepAwaiter.Await(this)
+                with
+                | exn ->
+                    methodBuilder.SetException(exn)
+                    faulted <- true
+                    false
+            if moveNext then
                 this.MoveNext()
-            else
-                awaiting <- true
-                let mutable this = this
-                methodBuilder.AwaitOnCompleted(&awaiter.Awaiter, &this)
     interface IAsyncStateMachine with
         member this.MoveNext() = this.MoveNext()
         member this.SetStateMachine(_) = ()
@@ -78,12 +99,28 @@ module Step =
 
     let bindTask (task : 'a Task) (continuation : 'a -> Step<'b, 'm>) =
         Step<'b, 'm>.OfContinuation(fun () ->
-            let taskAwaiter = (task :> Task).GetAwaiter()
-            StepAwaiter(taskAwaiter, fun () -> continuation <| task.GetAwaiter().GetResult()))
+            let taskAwaiter = task.GetAwaiter()
+            StepAwaiter
+                ( (fun state -> if taskAwaiter.IsCompleted then true else state.Await(taskAwaiter))
+                , (fun () -> continuation <| taskAwaiter.GetResult())
+                ))
 
     let bindVoidTask (task : Task) (continuation : unit -> Step<'b, 'm>) =
         Step<'b, 'm>.OfContinuation(fun () ->
-            StepAwaiter(task.GetAwaiter(), continuation))
+            let taskAwaiter = task.GetAwaiter()
+            StepAwaiter
+                ( (fun state -> if taskAwaiter.IsCompleted then true else state.Await(taskAwaiter))
+                , (fun () -> continuation())
+                ))
+
+    let inline bindGenericAwaitable< ^a, ^b, ^c, ^m when ^a : (member GetAwaiter : unit -> ^b) and ^b :> INotifyCompletion >
+        (awt : ^a) (continuation : unit -> Step< ^c, ^m >) =
+        Step< ^c, ^m >.OfContinuation(fun () ->
+            let taskAwaiter = (^a : (member GetAwaiter : unit -> ^b)(awt))
+            StepAwaiter
+                ( (fun state -> state.Await(taskAwaiter))
+                , (fun () -> continuation())
+                ))
 
     let rec combine (step : Step<'a, 'm>) (continuation : unit -> Step<'b, 'm>) =
         if isNull (box step.Continuation) then
@@ -92,7 +129,7 @@ module Step =
             Step<'b, 'm>.OfContinuation(fun () ->
                 let awaiter = step.Continuation()
                 let innerNext = awaiter.NextStep
-                StepAwaiter(awaiter.Awaiter, fun () -> combine (innerNext()) continuation))
+                StepAwaiter(awaiter.Await, fun () -> combine (innerNext()) continuation))
 
     let rec whileLoop (cond : unit -> bool) (body : unit -> Step<unit, 'm>) =
         if cond() then combine (body()) (fun () -> whileLoop cond body)
@@ -106,7 +143,7 @@ module Step =
                 let awaiter = step.Continuation()
                 Step<'a, 'm>.OfContinuation(fun () ->
                     let innerNext = awaiter.NextStep
-                    StepAwaiter(awaiter.Awaiter, fun () ->
+                    StepAwaiter(awaiter.Await, fun () ->
                         try
                             tryWithCore (innerNext()) catch
                         with
@@ -129,7 +166,7 @@ module Step =
                 let awaiter = step.Continuation()
                 Step<'a, 'm>.OfContinuation(fun () ->
                     let innerNext = awaiter.NextStep
-                    StepAwaiter(awaiter.Awaiter, fun () ->
+                    StepAwaiter(awaiter.Await, fun () ->
                         try
                             tryFinallyCore (innerNext()) fin
                         with
@@ -165,6 +202,14 @@ module Step =
 
 open Step
 
+type Await<'x>(value : 'x) =
+    struct
+        member this.Value = value
+    end
+
+/// Await a generic awaitable (with no result value).
+let await x = Await(x)
+
 type TaskBuilder() =
     member inline __.Delay(f : unit -> Step<_, _>) = f
     member inline __.Run(f : unit -> Step<'m, 'm>) = run (f())
@@ -173,9 +218,13 @@ type TaskBuilder() =
     member inline __.Return(x) = ret x
     member inline __.ReturnFrom(task) = bindTask task ret
     member inline __.ReturnFrom(task) = bindVoidTask task ret
+    member inline __.ReturnFrom(yld : YieldAwaitable) = bindGenericAwaitable yld ret
+    member inline __.ReturnFrom(awt : _ Await) = bindGenericAwaitable awt.Value ret
     member inline __.Combine(step, continuation) = combine step continuation
     member inline __.Bind(task, continuation) = bindTask task continuation
     member inline __.Bind(task, continuation) = bindVoidTask task continuation
+    member inline __.Bind(yld : YieldAwaitable, continuation) = bindGenericAwaitable yld continuation
+    member inline __.ReturnFrom(awt : _ Await, continuation) = bindGenericAwaitable awt.Value continuation
     member inline __.While(condition, body) = whileLoop condition body
     member inline __.For(sequence, body) = forLoop sequence body
     member inline __.TryWith(body, catch) = tryWith body catch
