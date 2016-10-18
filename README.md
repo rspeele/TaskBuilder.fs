@@ -47,6 +47,11 @@ class X
 }
 ```
 
+In practice there is a small performance hit compared to the C# version, because the C# compiler compiles each
+`async` method to a specialized state machine class, while `TaskBuilder` uses a general-purpose
+state machine and must chain together continuation functions to represent the computation.
+However, `TaskBuilder` should still be faster than using `Task.ContinueWith` or `Async.StartAsTask`.
+
 ## Usage
 
 This is public domain code. I encourage you to simply copy
