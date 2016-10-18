@@ -3,7 +3,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "TaskBuilder", "TaskBuilder\TaskBuilder.fsproj", "{71220903-DA6A-4208-A3B3-2E24D6CFBBD1}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Test", "Test\Test.fsproj", "{71220903-DA6A-4208-A3B3-2E24D6CFBBD1}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{E3834400-0075-43BE-A170-7E71791F8A43}"
+	ProjectSection(SolutionItems) = preProject
+		README.md = README.md
+		UNLICENSE = UNLICENSE
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
