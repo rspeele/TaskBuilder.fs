@@ -56,6 +56,6 @@ However, `TaskBuilder` should still be faster than using `Task.ContinueWith` or 
 
 This is public domain code. I encourage you to simply copy
 TaskBuilder.fs into your own project and use it as you see fit.
+It is not necessary to credit me or include any legal notice with your copy of the code.
 
-The other files are unit tests which you do not need to copy (but
-again, you are free to do so).
+The other files are tests which you do not need to copy (but again, you are free to do so).
