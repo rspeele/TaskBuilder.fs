@@ -1,4 +1,6 @@
 ﻿open System
+open System.Collections
+open System.Collections.Generic
 open System.Diagnostics
 open System.Linq
 open System.Threading
@@ -12,7 +14,7 @@ let testDelay() =
     let mutable x = 0
     let t =
         task {
-            do! Task.Delay(5)
+            do! Task.Delay(50)
             x <- x + 1
         }
     require (x = 0) "task already ran"
@@ -173,6 +175,162 @@ let testTryFinallyCaught() =
     require (t.Result = 2) "wrong return"
     require ran "never ran"
 
+let testUsing() =
+    let mutable disposed = false
+    let t =
+        task {
+            use d = { new IDisposable with member __.Dispose() = disposed <- true }
+            require (not disposed) "disposed way early"
+            do! Task.Delay(100)
+            require (not disposed) "disposed kinda early"
+        }
+    t.Wait()
+    require disposed "never disposed"
+
+let testUsingFromTask() =
+    let mutable disposedInner = false
+    let mutable disposed = false
+    let t =
+        task {
+            use! d =
+                task {
+                    do! Task.Delay(50)
+                    use i = { new IDisposable with member __.Dispose() = disposedInner <- true }
+                    require (not disposed && not disposedInner) "disposed inner early"
+                    return { new IDisposable with member __.Dispose() = disposed <- true }
+                }
+            require disposedInner "did not dispose inner after task completion"
+            require (not disposed) "disposed way early"
+            do! Task.Delay(50)
+            require (not disposed) "disposed kinda early"
+        }
+    t.Wait()
+    require disposed "never disposed"
+
+let testUsingSadPath() =
+    let mutable disposedInner = false
+    let mutable disposed = false
+    let t =
+        task {
+            try
+                use! d =
+                    task {
+                        do! Task.Delay(50)
+                        use i = { new IDisposable with member __.Dispose() = disposedInner <- true }
+                        failtest "uhoh"
+                        require (not disposed && not disposedInner) "disposed inner early"
+                        return { new IDisposable with member __.Dispose() = disposed <- true }
+                    }
+                ()
+            with
+            | Test msg ->
+                require disposedInner "did not dispose inner after task completion"
+                require (not disposed) "disposed way early"
+                do! Task.Delay(50)
+                require (not disposed) "disposed kinda early"
+        }
+    t.Wait()
+    require (not disposed) "disposed thing that never should've existed"
+
+let testForLoop() =
+    let mutable disposed = false
+    let wrapList =
+        let raw = ["a"; "b"; "c"] |> Seq.ofList
+        let getEnumerator() =
+            let raw = raw.GetEnumerator()
+            { new IEnumerator<string> with
+                member __.MoveNext() =
+                    require (not disposed) "moved next after disposal"
+                    raw.MoveNext()
+                member __.Current =
+                    require (not disposed) "accessed current after disposal"
+                    raw.Current
+                member __.Current =
+                    require (not disposed) "accessed current (boxed) after disposal"
+                    box raw.Current
+                member __.Dispose() =
+                    require (not disposed) "disposed twice"
+                    disposed <- true
+                    raw.Dispose()
+                member __.Reset() =
+                    require (not disposed) "reset after disposal"
+                    raw.Reset()
+            }
+        { new IEnumerable<string> with
+            member __.GetEnumerator() : IEnumerator<string> = getEnumerator()
+            member __.GetEnumerator() : IEnumerator = upcast getEnumerator()
+        }
+    let t =
+        task {
+            let mutable index = 0
+            do! Task.Yield()
+            for x in wrapList do
+                do! Task.Yield()
+                match index with
+                | 0 -> require (x = "a") "wrong first value"
+                | 1 -> require (x = "b") "wrong second value"
+                | 2 -> require (x = "c") "wrong third value"
+                | _ -> require false "iterated too far!"
+                index <- index + 1
+                do! Task.Yield()
+            do! Task.Yield()
+            return 1
+        }
+    t.Wait()
+    require disposed "never disposed"
+
+let testForLoopSadPath() =
+    let mutable disposed = false
+    let wrapList =
+        let raw = ["a"; "b"; "c"] |> Seq.ofList
+        let getEnumerator() =
+            let raw = raw.GetEnumerator()
+            { new IEnumerator<string> with
+                member __.MoveNext() =
+                    require (not disposed) "moved next after disposal"
+                    raw.MoveNext()
+                member __.Current =
+                    require (not disposed) "accessed current after disposal"
+                    raw.Current
+                member __.Current =
+                    require (not disposed) "accessed current (boxed) after disposal"
+                    box raw.Current
+                member __.Dispose() =
+                    require (not disposed) "disposed twice"
+                    disposed <- true
+                    raw.Dispose()
+                member __.Reset() =
+                    require (not disposed) "reset after disposal"
+                    raw.Reset()
+            }
+        { new IEnumerable<string> with
+            member __.GetEnumerator() : IEnumerator<string> = getEnumerator()
+            member __.GetEnumerator() : IEnumerator = upcast getEnumerator()
+        }
+    let mutable caught = false
+    let t =
+        task {
+            try
+                let mutable index = 0
+                do! Task.Yield()
+                for x in wrapList do
+                    do! Task.Yield()
+                    match index with
+                    | 0 -> require (x = "a") "wrong first value"
+                    | _ -> failtest "uhoh"
+                    index <- index + 1
+                    do! Task.Yield()
+                do! Task.Yield()
+                return 1
+            with
+            | Test "uhoh" ->
+                caught <- true
+                return 2
+        }
+    require (t.Result = 2) "wrong result"
+    require caught "didn't catch exception"
+    require disposed "never disposed"
+
 [<EntryPoint>]
 let main argv =
     testDelay()
@@ -184,4 +342,9 @@ let main argv =
     testTryFinallyHappyPath()
     testTryFinallySadPath()
     testTryFinallyCaught()
+    testUsing()
+    testUsingFromTask()
+    testUsingSadPath()
+    testForLoop()
+    testForLoopSadPath()
     0
