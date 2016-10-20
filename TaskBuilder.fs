@@ -118,52 +118,46 @@ module Step =
         if cond() then combine (body()) (fun () -> whileLoop cond body)
         else zero()
 
-    let rec tryWithCore (step : Step<'a, 'm>) (catch : exn -> Step<'a, 'm>) =
-        let stepContinuation = step.Continuation
-        if isNull stepContinuation then
-            step
-        else
-            let stepNext = stepContinuation.NextStep
-            StepContinuation
-                ( stepContinuation.Await
-                , fun () ->
-                    try
-                        tryWithCore (stepNext()) catch
-                    with
-                    | exn -> catch exn
-                ) |> Step<'a, 'm>.OfContinuation
+    let rec tryWithCore (stepContinuation : StepContinuation<'a, 'm>) (catch : exn -> Step<'a, 'm>) =
+        let stepNext = stepContinuation.NextStep
+        StepContinuation
+            ( stepContinuation.Await
+            , fun () -> tryWithNonInline stepNext catch
+            ) |> Step<'a, 'm>.OfContinuation
 
-    let inline tryWith step catch =
+    and inline tryWith (step : unit -> Step<'a, 'm>) (catch : exn -> Step<'a, 'm>) =
         try
-            tryWithCore (step()) catch
+            let step = step()
+            if isNull step.Continuation then
+                step
+            else
+                tryWithCore step.Continuation catch
         with
         | exn -> catch exn
 
-    let rec tryFinallyCore (step : Step<'a, 'm>) (fin : unit -> unit) =
-        let stepContinuation = step.Continuation
-        if isNull stepContinuation then
-            fin()
-            step
-        else
-            let stepNext = stepContinuation.NextStep
-            StepContinuation
-                ( stepContinuation.Await
-                , fun () ->
-                    try
-                        tryFinallyCore (stepNext()) fin
-                    with
-                    | _ ->
-                        fin()
-                        reraise()
-                ) |> Step<'a, 'm>.OfContinuation
+    and tryWithNonInline step catch = tryWith step catch
 
-    let inline tryFinally step fin =
+    let rec tryFinallyCore (stepContinuation : StepContinuation<'a, 'm>) (fin : unit -> unit) =
+        let stepNext = stepContinuation.NextStep
+        StepContinuation
+            ( stepContinuation.Await
+            , fun () -> tryFinallyNonInline stepNext fin
+            ) |> Step<'a, 'm>.OfContinuation
+
+    and inline tryFinally (step : unit -> Step<'a, 'm>) fin =
         try
-            tryFinallyCore (step()) fin
+            let step = step()
+            if isNull step.Continuation then
+                fin()
+                step
+            else
+                tryFinallyCore step.Continuation fin
         with
         | _ ->
             fin()
             reraise()
+
+    and tryFinallyNonInline step fin = tryFinally step fin
 
     let inline using (disp : #IDisposable) (body : _ -> Step<'a, 'm>) =
         tryFinally (fun () -> body disp) disp.Dispose
