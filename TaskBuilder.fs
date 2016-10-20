@@ -195,8 +195,6 @@ module TaskBuilder =
         member inline __.Run(f : unit -> Step<'m, 'm>) = run (f())
         member inline __.Zero() = zero()
         member inline __.Return(x) = ret x
-        member inline __.ReturnFrom(task) = bindTask task ret
-        member inline __.ReturnFrom(task) = bindVoidTask task ret
         member inline __.ReturnFrom(task) = bindConfiguredTask task ret
         member inline __.ReturnFrom(task) = bindVoidConfiguredTask task ret
         member inline __.ReturnFrom(yld : YieldAwaitable) = bindGenericAwaitable yld ret
@@ -212,6 +210,10 @@ module TaskBuilder =
         // End of consistent methods -- the following methods are different between
         // `TaskBuilder` and `ContextInsensitiveTaskBuilder`!
 
+        member inline __.ReturnFrom(task : _ Task) =
+            bindTask task ret
+        member inline __.ReturnFrom(task : Task) =
+            bindVoidTask task ret
         member inline __.Bind(task : _ Task, continuation) =
             bindTask task continuation
         member inline __.Bind(task : Task, continuation) =
@@ -224,8 +226,6 @@ module TaskBuilder =
         member inline __.Run(f : unit -> Step<'m, 'm>) = run (f())
         member inline __.Zero() = zero()
         member inline __.Return(x) = ret x
-        member inline __.ReturnFrom(task) = bindTask task ret
-        member inline __.ReturnFrom(task) = bindVoidTask task ret
         member inline __.ReturnFrom(task) = bindConfiguredTask task ret
         member inline __.ReturnFrom(task) = bindVoidConfiguredTask task ret
         member inline __.ReturnFrom(yld : YieldAwaitable) = bindGenericAwaitable yld ret
@@ -241,6 +241,10 @@ module TaskBuilder =
         // End of consistent methods -- the following methods are different between
         // `TaskBuilder` and `ContextInsensitiveTaskBuilder`!
 
+        member inline __.ReturnFrom(task : _ Task) =
+            bindConfiguredTask (task.ConfigureAwait(continueOnCapturedContext = false)) ret
+        member inline __.ReturnFrom(task : Task) =
+            bindVoidConfiguredTask (task.ConfigureAwait(continueOnCapturedContext = false)) ret
         member inline __.Bind(task : _ Task, continuation) =
             bindConfiguredTask (task.ConfigureAwait(continueOnCapturedContext = false)) continuation
         member inline __.Bind(task : Task, continuation) =
@@ -248,8 +252,12 @@ module TaskBuilder =
 
 [<AutoOpen>]
 module ContextSensitive =
-    /// 
+    /// Builds a `System.Threading.Tasks.Task<'a>` similarly to a C# async/await method.
     let task = TaskBuilder.TaskBuilder()
 
 module ContextInsensitive =
+    /// Builds a `System.Threading.Tasks.Task<'a>` similarly to a C# async/await method, but with
+    /// all awaited tasks automatically configured *not* to resume on the captured context.
+    /// This is often preferable when writing library code that is not context-aware, but undesirable when writing
+    /// e.g. code that must interact with user interface controls on the same thread as its caller.
     let task = TaskBuilder.ContextInsensitiveTaskBuilder()
