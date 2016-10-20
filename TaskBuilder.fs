@@ -15,18 +15,18 @@ open System.Runtime.CompilerServices
 
 type Step<'a, 'm> =
     struct
-        val mutable public ImmediateValue : 'a
-        val mutable public Continuation : unit -> StepAwaiter<'a, 'm>
+        val public ImmediateValue : 'a
+        val public Continuation : StepContinuation<'a, 'm>
         new(immediate, continuation) = { ImmediateValue = immediate; Continuation = continuation }
         static member OfImmediate(immediate) = Step(immediate, Unchecked.defaultof<_>)
         static member OfContinuation(con) = Step(Unchecked.defaultof<_>, con)
     end
-and StepAwaiter<'a, 'm> =
-    struct
-        val mutable public Await : StepStateMachine<'m> -> bool
-        val mutable public NextStep : unit -> Step<'a, 'm>
+and
+    [<AllowNullLiteral>]
+    StepContinuation<'a, 'm> =
+        val public Await : StepStateMachine<'m> -> bool
+        val public NextStep : unit -> Step<'a, 'm>
         new(await, nextStep) = { Await = await; NextStep = nextStep }
-    end
 and StepStateMachine<'m>(step : Step<'m, 'm>) =
     let mutable methodBuilder = AsyncTaskMethodBuilder<'m>()
     let mutable step = step
@@ -60,7 +60,7 @@ and StepStateMachine<'m>(step : Step<'m, 'm>) =
         else
             let moveNext =
                 try
-                    let stepAwaiter = step.Continuation()
+                    let stepAwaiter = step.Continuation
                     awaiting <- true
                     nextStep <- stepAwaiter.NextStep
                     stepAwaiter.Await(this)
@@ -81,58 +81,57 @@ module Step =
     let ret (x : 'a) = Step<'a, 'a>.OfImmediate(x)
 
     let bindTask (task : 'a Task) (continuation : 'a -> Step<'b, 'm>) =
-        Step<'b, 'm>.OfContinuation(fun () ->
-            let taskAwaiter = task.GetAwaiter()
-            StepAwaiter
-                ( (fun state -> if taskAwaiter.IsCompleted then true else state.Await(taskAwaiter))
-                , (fun () -> continuation <| taskAwaiter.GetResult())
-                ))
+        let taskAwaiter = task.GetAwaiter()
+        StepContinuation
+            ( (fun state -> if taskAwaiter.IsCompleted then true else state.Await(taskAwaiter))
+            , (fun () -> continuation <| taskAwaiter.GetResult())
+            ) |> Step<'b, 'm>.OfContinuation
 
     let bindVoidTask (task : Task) (continuation : unit -> Step<'b, 'm>) =
-        Step<'b, 'm>.OfContinuation(fun () ->
-            let taskAwaiter = task.GetAwaiter()
-            StepAwaiter
-                ( (fun state -> if taskAwaiter.IsCompleted then true else state.Await(taskAwaiter))
-                , (fun () -> continuation())
-                ))
+        StepContinuation
+            ( (fun state ->
+                let taskAwaiter = task.GetAwaiter()
+                if taskAwaiter.IsCompleted then true else state.Await(taskAwaiter))
+            , continuation
+            ) |> Step<'b, 'm>.OfContinuation
 
     let inline bindGenericAwaitable< ^a, ^b, ^c, ^m when ^a : (member GetAwaiter : unit -> ^b) and ^b :> INotifyCompletion >
         (awt : ^a) (continuation : unit -> Step< ^c, ^m >) =
-        Step< ^c, ^m >.OfContinuation(fun () ->
-            let taskAwaiter = (^a : (member GetAwaiter : unit -> ^b)(awt))
-            StepAwaiter
-                ( (fun state -> state.Await(taskAwaiter))
-                , (fun () -> continuation())
-                ))
+        let taskAwaiter = (^a : (member GetAwaiter : unit -> ^b)(awt))
+        StepContinuation
+            ( (fun state -> state.Await(taskAwaiter))
+            , continuation
+            ) |> Step< ^c, ^m >.OfContinuation
 
     let rec combine (step : Step<'a, 'm>) (continuation : unit -> Step<'b, 'm>) =
-        if isNull (box step.Continuation) then
+        let stepContinuation = step.Continuation
+        if isNull stepContinuation then
             continuation()
         else
-            Step<'b, 'm>.OfContinuation(fun () ->
-                let awaiter = step.Continuation()
-                let innerNext = awaiter.NextStep
-                StepAwaiter(awaiter.Await, fun () -> combine (innerNext()) continuation))
+            let stepNext = stepContinuation.NextStep
+            StepContinuation
+                ( stepContinuation.Await
+                , fun () -> combine (stepNext()) continuation
+                ) |> Step<'b, 'm>.OfContinuation
 
     let rec whileLoop (cond : unit -> bool) (body : unit -> Step<unit, 'm>) =
         if cond() then combine (body()) (fun () -> whileLoop cond body)
         else zero()
 
     let rec tryWithCore (step : Step<'a, 'm>) (catch : exn -> Step<'a, 'm>) =
-        if isNull (box step.Continuation) then
+        let stepContinuation = step.Continuation
+        if isNull stepContinuation then
             step
         else
-            try
-                let awaiter = step.Continuation()
-                Step<'a, 'm>.OfContinuation(fun () ->
-                    let innerNext = awaiter.NextStep
-                    StepAwaiter(awaiter.Await, fun () ->
-                        try
-                            tryWithCore (innerNext()) catch
-                        with
-                        | exn -> catch exn))
-            with
-            | exn -> catch exn
+            let stepNext = stepContinuation.NextStep
+            StepContinuation
+                ( stepContinuation.Await
+                , fun () ->
+                    try
+                        tryWithCore (stepNext()) catch
+                    with
+                    | exn -> catch exn
+                ) |> Step<'a, 'm>.OfContinuation
 
     let inline tryWith step catch =
         try
@@ -141,25 +140,22 @@ module Step =
         | exn -> catch exn
 
     let rec tryFinallyCore (step : Step<'a, 'm>) (fin : unit -> unit) =
-        if isNull (box step.Continuation) then
+        let stepContinuation = step.Continuation
+        if isNull stepContinuation then
             fin()
             step
         else
-            try
-                let awaiter = step.Continuation()
-                Step<'a, 'm>.OfContinuation(fun () ->
-                    let innerNext = awaiter.NextStep
-                    StepAwaiter(awaiter.Await, fun () ->
-                        try
-                            tryFinallyCore (innerNext()) fin
-                        with
-                        | _ ->
-                            fin()
-                            reraise()))
-            with
-            | _ ->
-                fin()
-                reraise()
+            let stepNext = stepContinuation.NextStep
+            StepContinuation
+                ( stepContinuation.Await
+                , fun () ->
+                    try
+                        tryFinallyCore (stepNext()) fin
+                    with
+                    | _ ->
+                        fin()
+                        reraise()
+                ) |> Step<'a, 'm>.OfContinuation
 
     let inline tryFinally step fin =
         try
@@ -170,7 +166,7 @@ module Step =
             reraise()
 
     let inline using (disp : #IDisposable) (body : _ -> Step<'a, 'm>) =
-        tryFinally (fun () -> body disp) (fun () -> disp.Dispose())
+        tryFinally (fun () -> body disp) disp.Dispose
 
     let forLoop (sequence : 'a seq) (body : 'a -> Step<unit, 'm>) =
         using (sequence.GetEnumerator())
