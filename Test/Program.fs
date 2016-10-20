@@ -18,6 +18,8 @@ open System.Threading.Tasks
 open System.IO
 open FSharp.Control.Tasks
 
+exception TestException of string
+
 let require x msg = if not x then failwith msg
 
 let testDelay() =
@@ -53,9 +55,7 @@ let testNonBlocking() =
     require (sw.ElapsedMilliseconds < 50L) "sleep blocked caller"
     t.Wait()
 
-exception Test of string
-
-let failtest str = raise (Test str)
+let failtest str = raise (TestException str)
 
 let testCatching1() =
     let mutable x = 0
@@ -68,7 +68,7 @@ let testCatching1() =
                 x <- 1
                 do! Task.Delay(100)
             with
-            | Test msg ->
+            | TestException msg ->
                 require (msg = "hello") "message tampered"
             | _ ->
                 require false "other exn type"
@@ -89,7 +89,7 @@ let testCatching2() =
                 x <- 1
                 do! Task.Delay(100)
             with
-            | Test msg ->
+            | TestException msg ->
                 require (msg = "hello") "message tampered"
             | _ ->
                 require false "other exn type"
@@ -109,7 +109,7 @@ let testNestedCatching() =
                 do! Task.Yield()
                 failtest "hello"
             with
-            | Test msg as exn ->
+            | TestException msg as exn ->
                 caughtInner <- counter
                 counter <- counter + 1
                 raise exn
@@ -119,7 +119,7 @@ let testNestedCatching() =
             try
                 do! t1()
             with
-            | Test msg as exn ->
+            | TestException msg as exn ->
                 caughtOuter <- counter
                 raise exn
             | _ ->
@@ -233,7 +233,7 @@ let testUsingSadPath() =
                     }
                 ()
             with
-            | Test msg ->
+            | TestException msg ->
                 require disposedInner "did not dispose inner after task completion"
                 require (not disposed) "disposed way early"
                 do! Task.Delay(50)
@@ -333,7 +333,7 @@ let testForLoopSadPath() =
                 do! Task.Yield()
                 return 1
             with
-            | Test "uhoh" ->
+            | TestException "uhoh" ->
                 caught <- true
                 return 2
         }
@@ -341,8 +341,40 @@ let testForLoopSadPath() =
     require caught "didn't catch exception"
     require disposed "never disposed"
 
+let testExceptionAttachedToTaskWithoutAwait() =
+    let mutable ranA = false
+    let mutable ranB = false
+    let t =
+        task {
+            ranA <- true
+            failtest "uhoh"
+            ranB <- true
+        }
+    require ranA "didn't run immediately"
+    require (not ranB) "ran past exception"
+    require (not (isNull t.Exception)) "didn't capture exception"
+    require (t.Exception.InnerExceptions.Count = 1) "captured more exceptions"
+    require (t.Exception.InnerException = TestException "uhoh") "wrong exception"
+
+let testExceptionAttachedToTaskWithAwait() =
+    let mutable ranA = false
+    let mutable ranB = false
+    let t =
+        task {
+            ranA <- true
+            failtest "uhoh"
+            do! Task.Delay(100)
+            ranB <- true
+        }
+    require ranA "didn't run immediately"
+    require (not ranB) "ran past exception"
+    require (not (isNull t.Exception)) "didn't capture exception"
+    require (t.Exception.InnerExceptions.Count = 1) "captured more exceptions"
+    require (t.Exception.InnerException = TestException "uhoh") "wrong exception"
+
 [<EntryPoint>]
 let main argv =
+    printfn "Running tests..."
     testDelay()
     testNoDelay()
     testNonBlocking()
@@ -357,4 +389,7 @@ let main argv =
     testUsingSadPath()
     testForLoop()
     testForLoopSadPath()
+    testExceptionAttachedToTaskWithoutAwait()
+    testExceptionAttachedToTaskWithAwait()
+    printfn "Passed all tests!"
     0

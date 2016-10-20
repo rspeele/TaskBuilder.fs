@@ -31,6 +31,7 @@ module TaskBuilder =
         let mutable methodBuilder = AsyncTaskMethodBuilder<'m>()
         let mutable step = step
         let mutable continuation = null : StepContinuation<_, _>
+
         member this.Run() =
             let mutable this = this
             methodBuilder.Start(&this)
@@ -181,18 +182,21 @@ module TaskBuilder =
         using (sequence.GetEnumerator())
             (fun e -> whileLoop e.MoveNext (fun () -> body e.Current))
 
-    let run (step : Step<'m, 'm>) =
-        if isNull step.Continuation then
-            Task.FromResult(step.ImmediateValue)
-        else
-            let state = StepStateMachine<'m>(step)
-            state.Run()
+    let inline run (firstStep : unit -> Step<'m, 'm>) =
+        try
+            let step = firstStep()
+            if isNull step.Continuation then
+                Task.FromResult(step.ImmediateValue)
+            else
+                StepStateMachine<'m>(step).Run()
+        with
+        | exn -> Task.FromException<_>(exn)
 
     type TaskBuilder() =
         // These methods are consistent between the two builders.
         // Unfortunately, inline members do not work with inheritance.
         member inline __.Delay(f : unit -> Step<_, _>) = f
-        member inline __.Run(f : unit -> Step<'m, 'm>) = run (f())
+        member inline __.Run(f : unit -> Step<'m, 'm>) = run f
         member inline __.Zero() = zero()
         member inline __.Return(x) = ret x
         member inline __.ReturnFrom(task) = bindConfiguredTask task ret
@@ -223,7 +227,7 @@ module TaskBuilder =
         // These methods are consistent between the two builders.
         // Unfortunately, inline members do not work with inheritance.
         member inline __.Delay(f : unit -> Step<_, _>) = f
-        member inline __.Run(f : unit -> Step<'m, 'm>) = run (f())
+        member inline __.Run(f : unit -> Step<'m, 'm>) = run f
         member inline __.Zero() = zero()
         member inline __.Return(x) = ret x
         member inline __.ReturnFrom(task) = bindConfiguredTask task ret
