@@ -16,7 +16,7 @@ open System.Linq
 open System.Threading
 open System.Threading.Tasks
 open System.IO
-open TaskBuilder
+open FSharp.Control.Tasks
 
 let require x msg = if not x then failwith msg
 
