@@ -30,47 +30,47 @@ and
 and StepStateMachine<'m>(step : Step<'m, 'm>) =
     let mutable methodBuilder = AsyncTaskMethodBuilder<'m>()
     let mutable step = step
-    let mutable nextStep = Unchecked.defaultof<_>
-    let mutable awaiting = false
-    let mutable faulted = false
+    let mutable continuation = null : StepContinuation<_, _>
     member this.Run() =
         let mutable this = this
         methodBuilder.Start(&this)
         methodBuilder.Task
 
     member this.Await(awaitable : 'await when 'await :> INotifyCompletion) =
-        awaiting <- true
         let mutable this = this
         let mutable awaiter = awaitable
         methodBuilder.AwaitOnCompleted(&awaiter, &this)
         false
+
+    member inline private this.ContinuationFaults() =
+        let currentContinuation = continuation
+        if not (isNull currentContinuation) then
+            continuation <- null
+            try
+                step <- currentContinuation.NextStep()
+                false
+            with
+            | exn ->
+                methodBuilder.SetException(exn)
+                true
+        else
+            false
     member this.MoveNext() =
-        if awaiting then
-            awaiting <- false
-            step <-
-                try nextStep() with
-                | exn -> 
-                    methodBuilder.SetException(exn)
-                    faulted <- true
-                    Step<'m, 'm>.OfImmediate(Unchecked.defaultof<_>)
-        if faulted then
-            ()
-        elif isNull (box step.Continuation) then
+        if this.ContinuationFaults() then () else
+        let stepContinuation = step.Continuation
+        if isNull stepContinuation then
             methodBuilder.SetResult(step.ImmediateValue)
         else
-            let moveNext =
+            continuation <- stepContinuation
+            if
                 try
-                    let stepAwaiter = step.Continuation
-                    awaiting <- true
-                    nextStep <- stepAwaiter.NextStep
-                    stepAwaiter.Await(this)
+                    stepContinuation.Await(this)
                 with
                 | exn ->
                     methodBuilder.SetException(exn)
-                    faulted <- true
                     false
-            if moveNext then
-                this.MoveNext()
+            then this.MoveNext()
+               
     interface IAsyncStateMachine with
         member this.MoveNext() = this.MoveNext()
         member this.SetStateMachine(_) = ()
