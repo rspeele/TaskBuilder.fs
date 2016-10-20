@@ -210,14 +210,14 @@ module TaskBuilder =
         member inline __.TryFinally(body, fin) = tryFinally body fin
         member inline __.Using(disp, body) = using disp body
         // End of consistent methods -- the following methods are different between
-        // `TaskBuilder` and `ContextAgnosticTaskBuilder`!
+        // `TaskBuilder` and `ContextInsensitiveTaskBuilder`!
 
         member inline __.Bind(task : _ Task, continuation) =
             bindTask task continuation
         member inline __.Bind(task : Task, continuation) =
             bindVoidTask task continuation
 
-    type ContextAgnosticTaskBuilder() =
+    type ContextInsensitiveTaskBuilder() =
         // These methods are consistent between the two builders.
         // Unfortunately, inline members do not work with inheritance.
         member inline __.Delay(f : unit -> Step<_, _>) = f
@@ -239,7 +239,7 @@ module TaskBuilder =
         member inline __.TryFinally(body, fin) = tryFinally body fin
         member inline __.Using(disp, body) = using disp body
         // End of consistent methods -- the following methods are different between
-        // `TaskBuilder` and `ContextAgnosticTaskBuilder`!
+        // `TaskBuilder` and `ContextInsensitiveTaskBuilder`!
 
         member inline __.Bind(task : _ Task, continuation) =
             bindConfiguredTask (task.ConfigureAwait(continueOnCapturedContext = false)) continuation
@@ -248,7 +248,8 @@ module TaskBuilder =
 
 [<AutoOpen>]
 module ContextSensitive =
+    /// 
     let task = TaskBuilder.TaskBuilder()
 
-module ContextAgnostic =
-    let task = TaskBuilder.ContextAgnosticTaskBuilder()
+module ContextInsensitive =
+    let task = TaskBuilder.ContextInsensitiveTaskBuilder()
