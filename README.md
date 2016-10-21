@@ -73,3 +73,16 @@ of the code.
 
 The other files are tests which you do not need to copy (but again,
 you are free to do so).
+
+Note that by default, if you open `FSharp.Control.Tasks`, you'll get
+a `task { ... }` builder that behaves as closely to C#'s async methods as possible.
+
+However, I have also included a version of the `task { ... }` builder under
+`FSharp.Control.Tasks.ContextInsensitive` which makes one minor change: it will
+automatically call `task.ConfigureAwait(false)` on every task you await.
+
+This can improve performance if you're writing library code or server-side code
+and don't need to interact with thread-unsafe things like Windows forms controls.
+If you're not sure whether you want to use this version of the builder,
+reading [this MSDN article](https://msdn.microsoft.com/en-us/magazine/jj991977.aspx)
+may help.
