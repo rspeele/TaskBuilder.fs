@@ -62,7 +62,7 @@ module TaskBuilder =
 
         /// Return true if there was a pending continuation which, when ran,
         /// placed our methodBuilder into a faulted state.
-        member inline private this.ContinuationFaults() =
+        member inline private this.ContinuationEntersFaultedState() =
             let currentContinuation = continuation
             if not (isNull currentContinuation) then
                 continuation <- null
@@ -79,7 +79,7 @@ module TaskBuilder =
         /// If awaiting, MoveNext() will be called again when the awaitable completes.
         member this.MoveNext() =
             // Don't do anything if running a pending continuation leads to a faulted state.
-            if this.ContinuationFaults() then () else
+            if this.ContinuationEntersFaultedState() then () else
             let stepContinuation = step.Continuation
             if isNull stepContinuation then // We must have a result.
                 methodBuilder.SetResult(step.ImmediateValue)
