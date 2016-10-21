@@ -22,6 +22,16 @@ exception TestException of string
 
 let require x msg = if not x then failwith msg
 
+let testShortCircuitResult() =
+    let t =
+        task {
+            let! x = Task.FromResult(1)
+            let! y = Task.FromResult(2)
+            return x + y
+        }
+    require t.IsCompleted "didn't short-circuit already completed tasks"
+    require (t.Result = 3) "wrong result"
+
 let testDelay() =
     let mutable x = 0
     let t =
@@ -456,6 +466,7 @@ let test2ndExceptionThrownInFinally() =
 [<EntryPoint>]
 let main argv =
     printfn "Running tests..."
+    testShortCircuitResult()
     testDelay()
     testNoDelay()
     testNonBlocking()
