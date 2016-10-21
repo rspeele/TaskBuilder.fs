@@ -50,13 +50,13 @@ module TaskBuilder =
             val public NextStep : unit -> Step<'a, 'm>
             new(await, nextStep) = { Awaitable = await; NextStep = nextStep }
     /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
-    and StepStateMachine<'m>(step : Step<'m, 'm>) =
+    and StepStateMachine<'m>(continuation : StepContinuation<'m, 'm>) =
         let mutable methodBuilder = AsyncTaskMethodBuilder<'m>()
-        /// The step we're getting ready to run.
-        let mutable step = step
-        /// The continuation we left off awaiting on our last MoveNext(), if any.
-        /// This will be non-null on every MoveNext() except the very first one.
-        let mutable continuation = null : StepContinuation<_, _>
+        /// The continuation we left off awaiting on our last MoveNext().
+        let mutable continuation = continuation
+        /// If true, this is our first MoveNext(), and should await the first
+        /// continuation instead of proceeding to its next step.
+        let mutable initial = true
 
         /// Start execution as a `Task<'m>`.
         member this.Run() =
@@ -64,36 +64,29 @@ module TaskBuilder =
             methodBuilder.Start(&this)
             methodBuilder.Task
 
-        /// Return true if there was a pending continuation which, when ran,
-        /// placed our methodBuilder into a faulted state.
-        member inline private this.ContinuationEntersFaultedState() =
-            let currentContinuation = continuation
-            if not (isNull currentContinuation) then
-                continuation <- null
-                try
-                    step <- currentContinuation.NextStep()
-                    false
-                with
-                | exn ->
-                    methodBuilder.SetException(exn)
-                    true
-            else
-                false
         /// Proceed to one of three states: result, failure, or awaiting.
         /// If awaiting, MoveNext() will be called again when the awaitable completes.
         member this.MoveNext() =
-            // Don't do anything if running a pending continuation leads to a faulted state.
-            if this.ContinuationEntersFaultedState() then () else
-            let stepContinuation = step.Continuation
-            if isNull stepContinuation then // We must have a result.
-                methodBuilder.SetResult(step.ImmediateValue)
-            else // Time to await.
-                continuation <- stepContinuation // Set the pending continuation for when we resume.
-                // Have to declare mutables so we can pass by reference.
-                // We don't really need to keep the mutated versions of these though,
-                // at least for the set of awaitable types we support.
+            let shouldAwait =
+                if initial then
+                    initial <- false
+                    true // We need to await the first continuation so that MoveNext() will be called at the right time.
+                else
+                    try
+                        let step = continuation.NextStep()
+                        if isNull step.Continuation then
+                            methodBuilder.SetResult(step.ImmediateValue)
+                            false
+                        else
+                            continuation <- step.Continuation
+                            true
+                    with
+                    | exn ->
+                        methodBuilder.SetException(exn)
+                        false
+            if shouldAwait then
                 let mutable this = this
-                let mutable awaiter = stepContinuation.Awaitable
+                let mutable awaiter = continuation.Awaitable
                 // Tell the builder to call us again when this thing is done.
                 methodBuilder.AwaitOnCompleted(&awaiter, &this)
                
@@ -258,7 +251,7 @@ module TaskBuilder =
             if isNull step.Continuation then
                 Task.FromResult(step.ImmediateValue)
             else
-                StepStateMachine<'m>(step).Run()
+                StepStateMachine<'m>(step.Continuation).Run()
         // Any exceptions should go on the task, rather than being thrown from this call.
         // This matches C# behavior where you won't see an exception until awaiting the task,
         // even if it failed before reaching the first "await".
