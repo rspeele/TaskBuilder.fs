@@ -49,7 +49,7 @@ namespace BenchmarkCS
                 await ReadFile(tmp);
             }
             sw.Stop();
-            Console.WriteLine($"Completed in {sw.ElapsedMilliseconds} ms");
+            Console.WriteLine($"C# methods completed in {sw.ElapsedMilliseconds} ms");
             File.Delete(tmp);
         }
 
