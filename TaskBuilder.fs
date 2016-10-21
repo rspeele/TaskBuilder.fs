@@ -64,27 +64,29 @@ module TaskBuilder =
             methodBuilder.Start(&this)
             methodBuilder.Task
 
+        /// Return true if we should call `AwaitOnCompleted` on the current awaitable.
+        member inline private __.ShouldAwait() =
+            if initial then
+                initial <- false
+                true // We need to await the first continuation so that MoveNext() will be called at the right time.
+            else
+                try
+                    let step = continuation.NextStep()
+                    if isNull step.Continuation then
+                        methodBuilder.SetResult(step.ImmediateValue)
+                        false
+                    else
+                        continuation <- step.Continuation
+                        true
+                with
+                | exn ->
+                    methodBuilder.SetException(exn)
+                    false
+
         /// Proceed to one of three states: result, failure, or awaiting.
         /// If awaiting, MoveNext() will be called again when the awaitable completes.
         member this.MoveNext() =
-            let shouldAwait =
-                if initial then
-                    initial <- false
-                    true // We need to await the first continuation so that MoveNext() will be called at the right time.
-                else
-                    try
-                        let step = continuation.NextStep()
-                        if isNull step.Continuation then
-                            methodBuilder.SetResult(step.ImmediateValue)
-                            false
-                        else
-                            continuation <- step.Continuation
-                            true
-                    with
-                    | exn ->
-                        methodBuilder.SetException(exn)
-                        false
-            if shouldAwait then
+            if this.ShouldAwait() then
                 let mutable this = this
                 let mutable awaiter = continuation.Awaitable
                 // Tell the builder to call us again when this thing is done.
