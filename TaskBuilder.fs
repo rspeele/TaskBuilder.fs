@@ -41,14 +41,13 @@ module TaskBuilder =
         /// when the awaitable has completed in order to reach the next step in the computation.
         [<AllowNullLiteral>]
         StepContinuation<'a, 'm> =
-            /// A function which, given our state machine, might await the awaitable.
-            /// Can return true to indicate that no await was actually performed and computation
-            /// can proceed immediately to the next step.
-            val public Await : StepStateMachine<'m> -> bool
+            /// The task or whatever to await. Unfortunately this incurs boxing overhead for
+            /// framework awaitables which tend to be structs.
+            val public Awaitable : INotifyCompletion
             /// The delayed continuation which proceeds to the next step.
             /// Must not be called until the awaitable has finished.
             val public NextStep : unit -> Step<'a, 'm>
-            new(await, nextStep) = { Await = await; NextStep = nextStep }
+            new(await, nextStep) = { Awaitable = await; NextStep = nextStep }
     /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
     and StepStateMachine<'m>(step : Step<'m, 'm>) =
         let mutable methodBuilder = AsyncTaskMethodBuilder<'m>()
@@ -60,19 +59,6 @@ module TaskBuilder =
             let mutable this = this
             methodBuilder.Start(&this)
             methodBuilder.Task
-
-        /// Tell the state machine to `MoveNext()` whenever the awaitable finishes.
-        /// Always returns false (for convenience in implementing `StepContinuation.Await`).
-        member this.Await(awaitable : 'await when 'await :> INotifyCompletion) =
-            // Have to declare mutables so we can pass by reference.
-            // We don't really need to keep the mutated versions of these though,
-            // at least for the set of awaitable types we support.
-            let mutable this = this
-            let mutable awaiter = awaitable
-            // Tell it to call our MoveNext() when this thing is done.
-            methodBuilder.AwaitOnCompleted(&awaiter, &this)
-            // Return false to indicate that we're awaiting something and can't proceed synchronously.
-            false
 
         /// Return true if there was a pending continuation which, when ran,
         /// placed our methodBuilder into a faulted state.
@@ -90,7 +76,7 @@ module TaskBuilder =
             else
                 false
         /// Proceed to one of three states: result, failure, or awaiting.
-        /// If awaiting, we can assume MoveNext() will be called again when the awaitable completes.
+        /// If awaiting, MoveNext() will be called again when the awaitable completes.
         member this.MoveNext() =
             // Don't do anything if running a pending continuation leads to a faulted state.
             if this.ContinuationFaults() then () else
@@ -99,18 +85,13 @@ module TaskBuilder =
                 methodBuilder.SetResult(step.ImmediateValue)
             else // Time to await.
                 continuation <- stepContinuation // Set the pending continuation for when we resume.
-                if
-                    try
-                        // We decide whether to proceed based on the result of this call.
-                        // The StepContinuation is in charge of figuring out if the awaitable is already complete.
-                        stepContinuation.Await(this)
-                    with
-                    | exn ->
-                        methodBuilder.SetException(exn)
-                        false // Definitely shouldn't proceed if we're in a faulted state.
-                then
-                    // If we can proceed synchronously, then it's our responsibility to do so.
-                    this.MoveNext()
+                // Have to declare mutables so we can pass by reference.
+                // We don't really need to keep the mutated versions of these though,
+                // at least for the set of awaitable types we support.
+                let mutable this = this
+                let mutable awaiter = stepContinuation.Awaitable
+                // Tell the builder to call us again when this thing is done.
+                methodBuilder.AwaitOnCompleted(&awaiter, &this)
                
         interface IAsyncStateMachine with
             member this.MoveNext() = this.MoveNext()
@@ -129,31 +110,37 @@ module TaskBuilder =
 
     let bindTask (task : 'a Task) (continuation : 'a -> Step<'b, 'm>) =
         let taskAwaiter = task.GetAwaiter()
-        StepContinuation
-            ( (fun state -> if taskAwaiter.IsCompleted then true else state.Await(taskAwaiter))
-            , (fun () -> continuation <| taskAwaiter.GetResult())
-            ) |> Step<'b, 'm>.OfContinuation
+        if taskAwaiter.IsCompleted then
+            taskAwaiter.GetResult() |> continuation
+        else
+            StepContinuation
+                ( taskAwaiter
+                , (fun () -> taskAwaiter.GetResult() |> continuation)
+                ) |> Step<'b, 'm>.OfContinuation
 
     let bindVoidTask (task : Task) (continuation : unit -> Step<'b, 'm>) =
+        let taskAwaiter = task.GetAwaiter()
+        if taskAwaiter.IsCompleted then continuation() else
         StepContinuation
-            ( (fun state ->
-                let taskAwaiter = task.GetAwaiter()
-                if taskAwaiter.IsCompleted then true else state.Await(taskAwaiter))
+            ( taskAwaiter
             , continuation
             ) |> Step<'b, 'm>.OfContinuation
 
     let bindConfiguredTask (task : 'a ConfiguredTaskAwaitable) (continuation : 'a -> Step<'b, 'm>) =
         let taskAwaiter = task.GetAwaiter()
-        StepContinuation
-            ( (fun state -> if taskAwaiter.IsCompleted then true else state.Await(taskAwaiter))
-            , (fun () -> continuation <| taskAwaiter.GetResult())
-            ) |> Step<'b, 'm>.OfContinuation
+        if taskAwaiter.IsCompleted then
+            taskAwaiter.GetResult() |> continuation
+        else
+            StepContinuation
+                ( taskAwaiter
+                , (fun () -> taskAwaiter.GetResult() |> continuation)
+                ) |> Step<'b, 'm>.OfContinuation
 
     let bindVoidConfiguredTask (task : ConfiguredTaskAwaitable) (continuation : unit -> Step<'b, 'm>) =
+        let taskAwaiter = task.GetAwaiter()
+        if taskAwaiter.IsCompleted then continuation() else
         StepContinuation
-            ( (fun state ->
-                let taskAwaiter = task.GetAwaiter()
-                if taskAwaiter.IsCompleted then true else state.Await(taskAwaiter))
+            ( taskAwaiter
             , continuation
             ) |> Step<'b, 'm>.OfContinuation
 
@@ -162,7 +149,7 @@ module TaskBuilder =
         (awt : ^a) (continuation : unit -> Step< ^c, ^m >) =
         let taskAwaiter = (^a : (member GetAwaiter : unit -> ^b)(awt))
         StepContinuation
-            ( (fun state -> state.Await(taskAwaiter))
+            ( taskAwaiter
             , continuation
             ) |> Step< ^c, ^m >.OfContinuation
 
@@ -173,7 +160,7 @@ module TaskBuilder =
         else
             let stepNext = stepContinuation.NextStep
             StepContinuation
-                ( stepContinuation.Await
+                ( stepContinuation.Awaitable
                 , fun () -> combine (stepNext()) continuation
                 ) |> Step<'b, 'm>.OfContinuation
 
@@ -184,7 +171,7 @@ module TaskBuilder =
     let rec tryWithCore (stepContinuation : StepContinuation<'a, 'm>) (catch : exn -> Step<'a, 'm>) =
         let stepNext = stepContinuation.NextStep
         StepContinuation
-            ( stepContinuation.Await
+            ( stepContinuation.Awaitable
             , fun () -> tryWithNonInline stepNext catch
             ) |> Step<'a, 'm>.OfContinuation
 
@@ -203,7 +190,7 @@ module TaskBuilder =
     let rec tryFinallyCore (stepContinuation : StepContinuation<'a, 'm>) (fin : unit -> unit) =
         let stepNext = stepContinuation.NextStep
         StepContinuation
-            ( stepContinuation.Await
+            ( stepContinuation.Awaitable
             , fun () -> tryFinallyNonInline stepNext fin
             ) |> Step<'a, 'm>.OfContinuation
 
