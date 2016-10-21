@@ -3,6 +3,7 @@
 This is a single-file project that implements a
 [computation expression](https://docs.microsoft.com/en-us/dotnet/articles/fsharp/language-reference/computation-expressions)
 for writing `Task`s in F#.
+It is free and unencumbered software released into the public domain.
 
 F# comes with its own `Async` type and functions to convert back and
 forth between `Async` and `Task`, but this is a bit of a hassle --
@@ -17,6 +18,8 @@ asynchronous blocks that behave just like `async` methods in C# do.
 For example, this F# method:
 
 ```fsharp
+open FSharp.Control.Tasks
+
 type X() =
   static member WriteFile() =
     task {
@@ -33,6 +36,8 @@ type X() =
 Should work exactly the same as this C# method:
 
 ```csharp
+using System.Threading.Tasks
+
 class X
 {
   public static async Task<string> WriteFile()
