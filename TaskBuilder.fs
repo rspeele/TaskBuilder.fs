@@ -13,36 +13,69 @@ open System
 open System.Threading.Tasks
 open System.Runtime.CompilerServices
 
+// This module is not really obsolete, but it's not intended to be referenced directly from user code.
+// However, it can't be private because it is used within inline functions that *are* user-visible.
+// Marking it as obsolete is a workaround to hide it from auto-completion tools.
+[<Obsolete>]
 module TaskBuilder =
+    /// Represents the state of a computation:
+    /// either awaiting something with a continuation,
+    /// or completed with a return value.
+    /// The 'a generic parameter is the result type of this step, whereas the 'm generic parameter
+    /// is the result type of the entire `task` block it occurs in.
     [<Struct>]
     type Step<'a, 'm> =
+        /// If this task has produced a return value, this is that value, and the `Continuation`
+        /// property will be null. Idiomatic F# would use a discriminated union but we want to
+        /// avoid unnecessary allocations.
         val public ImmediateValue : 'a
+        /// If non-null, an object implementing the next step in the task.
         val public Continuation : StepContinuation<'a, 'm>
         new(immediate, continuation) = { ImmediateValue = immediate; Continuation = continuation }
+        /// Create a step from an immediately available return value.
         static member OfImmediate(immediate) = Step(immediate, Unchecked.defaultof<_>)
+        /// Create a step from a continuation.
         static member OfContinuation(con) = Step(Unchecked.defaultof<_>, con)
     and
+        /// Encapsulates the pairing of an awaitable and continuation that should execute
+        /// when the awaitable has completed in order to reach the next step in the computation.
         [<AllowNullLiteral>]
         StepContinuation<'a, 'm> =
+            /// A function which, given our state machine, might await the awaitable.
+            /// Can return true to indicate that no await was actually performed and computation
+            /// can proceed immediately to the next step.
             val public Await : StepStateMachine<'m> -> bool
+            /// The delayed continuation which proceeds to the next step.
+            /// Must not be called until the awaitable has finished.
             val public NextStep : unit -> Step<'a, 'm>
             new(await, nextStep) = { Await = await; NextStep = nextStep }
+    /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
     and StepStateMachine<'m>(step : Step<'m, 'm>) =
         let mutable methodBuilder = AsyncTaskMethodBuilder<'m>()
         let mutable step = step
         let mutable continuation = null : StepContinuation<_, _>
 
+        /// Start execution as a `Task<'m>`.
         member this.Run() =
             let mutable this = this
             methodBuilder.Start(&this)
             methodBuilder.Task
 
+        /// Tell the state machine to `MoveNext()` whenever the awaitable finishes.
+        /// Always returns false (for convenience in implementing `StepContinuation.Await`).
         member this.Await(awaitable : 'await when 'await :> INotifyCompletion) =
+            // Have to declare mutables so we can pass by reference.
+            // We don't really need to keep the mutated versions of these though,
+            // at least for the set of awaitable types we support.
             let mutable this = this
             let mutable awaiter = awaitable
+            // Tell it to call our MoveNext() when this thing is done.
             methodBuilder.AwaitOnCompleted(&awaiter, &this)
+            // Return false to indicate that we're awaiting something and can't proceed synchronously.
             false
 
+        /// Return true if there was a pending continuation which, when ran,
+        /// placed our methodBuilder into a faulted state.
         member inline private this.ContinuationFaults() =
             let currentContinuation = continuation
             if not (isNull currentContinuation) then
@@ -56,29 +89,43 @@ module TaskBuilder =
                     true
             else
                 false
+        /// Proceed to one of three states: result, failure, or awaiting.
+        /// If awaiting, we can assume MoveNext() will be called again when the awaitable completes.
         member this.MoveNext() =
+            // Don't do anything if running a pending continuation leads to a faulted state.
             if this.ContinuationFaults() then () else
             let stepContinuation = step.Continuation
-            if isNull stepContinuation then
+            if isNull stepContinuation then // We must have a result.
                 methodBuilder.SetResult(step.ImmediateValue)
-            else
-                continuation <- stepContinuation
+            else // Time to await.
+                continuation <- stepContinuation // Set the pending continuation for when we resume.
                 if
                     try
+                        // We decide whether to proceed based on the result of this call.
+                        // The StepContinuation is in charge of figuring out if the awaitable is already complete.
                         stepContinuation.Await(this)
                     with
                     | exn ->
                         methodBuilder.SetException(exn)
-                        false
-                then this.MoveNext()
+                        false // Definitely shouldn't proceed if we're in a faulted state.
+                then
+                    // If we can proceed synchronously, then it's our responsibility to do so.
+                    this.MoveNext()
                
         interface IAsyncStateMachine with
             member this.MoveNext() = this.MoveNext()
-            member this.SetStateMachine(_) = ()
+            member this.SetStateMachine(_) = () // Doesn't really apply since we're a reference type.
 
+    /// Used to represent no-ops like the implicit empty "else" branch of an "if" expression.
+    /// Notice that this doesn't impose any constraints on the return type of the task block.
     let zero() = Step<unit, _>.OfImmediate(())
 
+    /// Used to return a value. Notice that the result type of this step must be the same as the
+    /// result type of the entire method.
     let ret (x : 'a) = Step<'a, 'a>.OfImmediate(x)
+
+    // The following various flavors of `bind` are for sequencing tasks with the continuations
+    // that should run following them. They all follow pretty much the same formula.
 
     let bindTask (task : 'a Task) (continuation : 'a -> Step<'b, 'm>) =
         let taskAwaiter = task.GetAwaiter()
@@ -254,6 +301,9 @@ module TaskBuilder =
         member inline __.Bind(task : Task, continuation) =
             bindVoidConfiguredTask (task.ConfigureAwait(continueOnCapturedContext = false)) continuation
 
+// Don't warn about our use of the "obsolete" module we just defined (see notes at start of file).
+#nowarn "44"
+
 [<AutoOpen>]
 module ContextSensitive =
     /// Builds a `System.Threading.Tasks.Task<'a>` similarly to a C# async/await method.
@@ -265,3 +315,4 @@ module ContextInsensitive =
     /// This is often preferable when writing library code that is not context-aware, but undesirable when writing
     /// e.g. code that must interact with user interface controls on the same thread as its caller.
     let task = TaskBuilder.ContextInsensitiveTaskBuilder()
+
