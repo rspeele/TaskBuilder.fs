@@ -355,6 +355,22 @@ let testExceptionAttachedToTaskWithoutAwait() =
     require (not (isNull t.Exception)) "didn't capture exception"
     require (t.Exception.InnerExceptions.Count = 1) "captured more exceptions"
     require (t.Exception.InnerException = TestException "uhoh") "wrong exception"
+    let mutable caught = false
+    let mutable ranCatcher = false
+    let catcher =
+        task {
+            try
+                ranCatcher <- true
+                let! result = t
+                return false
+            with
+            | TestException "uhoh" ->
+                caught <- true
+                return true
+        }
+    require ranCatcher "didn't run"
+    require catcher.Result "didn't catch"
+    require caught "didn't catch"
 
 let testExceptionAttachedToTaskWithAwait() =
     let mutable ranA = false
@@ -371,6 +387,22 @@ let testExceptionAttachedToTaskWithAwait() =
     require (not (isNull t.Exception)) "didn't capture exception"
     require (t.Exception.InnerExceptions.Count = 1) "captured more exceptions"
     require (t.Exception.InnerException = TestException "uhoh") "wrong exception"
+    let mutable caught = false
+    let mutable ranCatcher = false
+    let catcher =
+        task {
+            try
+                ranCatcher <- true
+                let! result = t
+                return false
+            with
+            | TestException "uhoh" ->
+                caught <- true
+                return true
+        }
+    require ranCatcher "didn't run"
+    require catcher.Result "didn't catch"
+    require caught "didn't catch"
 
 [<EntryPoint>]
 let main argv =
