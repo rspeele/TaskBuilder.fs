@@ -169,11 +169,14 @@ module TaskBuilder =
                 ) |> Step<'b, 'm>.OfContinuation
 
     /// Builds a step that executes the body while the condition predicate is true.
-    let rec whileLoop (cond : unit -> bool) (body : unit -> Step<unit, 'm>) =
+    let inline whileLoop (cond : unit -> bool) (body : unit -> Step<unit, 'm>) =
         if cond() then
-            combine
-                (body()) // We're running the body this time, at least.
-                (fun () -> whileLoop cond body) // After it's done, repeat the loop.
+            // Create a self-referencing closure to test whether to repeat the loop on future iterations.
+            let rec repeat () =
+                if cond() then combine (body()) repeat
+                else zero()
+            // Run the body the first time and chain it to the repeat logic.
+            combine (body()) repeat
         else zero()
 
     /// The recursive part of a try/with statement. Nothing fancy here, just chains the try/with back
