@@ -242,7 +242,7 @@ module TaskBuilder =
         // A using statement is just a try/finally with the finally block disposing if non-null.
         tryFinally
             (fun () -> body disp)
-            (fun () -> if isNull (box disp) then disp.Dispose())
+            (fun () -> if not (isNull (box disp)) then disp.Dispose())
 
     /// Implements a loop that runs `body` for each element in `sequence`.
     let forLoop (sequence : 'a seq) (body : 'a -> Step<unit, 'm>) =
