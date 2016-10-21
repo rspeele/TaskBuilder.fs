@@ -11,6 +11,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		README.md = README.md
 	EndProjectSection
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BenchmarkFS", "BenchmarkFS\BenchmarkFS.fsproj", "{85101878-6330-48DC-8455-DD5366F2D6B1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BenchmarkCS", "BenchmarkCS\BenchmarkCS.csproj", "{142E16F1-134A-405E-8507-D6BD2C6EFDDE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +25,14 @@ Global
 		{71220903-DA6A-4208-A3B3-2E24D6CFBBD1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{71220903-DA6A-4208-A3B3-2E24D6CFBBD1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{71220903-DA6A-4208-A3B3-2E24D6CFBBD1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{85101878-6330-48DC-8455-DD5366F2D6B1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{85101878-6330-48DC-8455-DD5366F2D6B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{85101878-6330-48DC-8455-DD5366F2D6B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{85101878-6330-48DC-8455-DD5366F2D6B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{142E16F1-134A-405E-8507-D6BD2C6EFDDE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{142E16F1-134A-405E-8507-D6BD2C6EFDDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{142E16F1-134A-405E-8507-D6BD2C6EFDDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{142E16F1-134A-405E-8507-D6BD2C6EFDDE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
