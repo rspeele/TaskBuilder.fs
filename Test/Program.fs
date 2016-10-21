@@ -404,6 +404,55 @@ let testExceptionAttachedToTaskWithAwait() =
     require catcher.Result "didn't catch"
     require caught "didn't catch"
 
+let testExceptionThrownInFinally() =
+    let mutable ranInitial = false
+    let mutable ranNext = false
+    let mutable ranFinally = 0
+    let t =
+        task {
+            try
+                ranInitial <- true
+                do! Task.Yield()
+                ranNext <- true
+            finally
+                ranFinally <- ranFinally + 1
+                failtest "finally exn!"
+        }
+    require ranInitial "didn't run initial"
+    require (not ranNext) "ran next too early"
+    try
+        t.Wait()
+        require false "shouldn't get here"
+    with
+    | _ -> ()
+    require ranNext "didn't run next"
+    require (ranFinally = 1) "didn't run finally exactly once"
+
+let test2ndExceptionThrownInFinally() =
+    let mutable ranInitial = false
+    let mutable ranNext = false
+    let mutable ranFinally = 0
+    let t =
+        task {
+            try
+                ranInitial <- true
+                do! Task.Yield()
+                ranNext <- true
+                failtest "uhoh"
+            finally
+                ranFinally <- ranFinally + 1
+                failtest "2nd exn!"
+        }
+    require ranInitial "didn't run initial"
+    require (not ranNext) "ran next too early"
+    try
+        t.Wait()
+        require false "shouldn't get here"
+    with
+    | _ -> ()
+    require ranNext "didn't run next"
+    require (ranFinally = 1) "didn't run finally exactly once"
+
 [<EntryPoint>]
 let main argv =
     printfn "Running tests..."
@@ -423,5 +472,7 @@ let main argv =
     testForLoopSadPath()
     testExceptionAttachedToTaskWithoutAwait()
     testExceptionAttachedToTaskWithAwait()
+    testExceptionThrownInFinally()
+    test2ndExceptionThrownInFinally()
     printfn "Passed all tests!"
     0

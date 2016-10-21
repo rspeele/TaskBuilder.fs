@@ -42,7 +42,8 @@ module TaskBuilder =
         [<AllowNullLiteral>]
         StepContinuation<'a, 'm> =
             /// The task or whatever to await. Unfortunately this incurs boxing overhead for
-            /// framework awaitables which tend to be structs.
+            /// framework awaitables which tend to be structs. On the plus side it won't happen
+            /// if they've immediately completed since that'll be a Step.OfImmediate.
             val public Awaitable : INotifyCompletion
             /// The delayed continuation which proceeds to the next step.
             /// Must not be called until the awaitable has finished.
@@ -105,14 +106,14 @@ module TaskBuilder =
     /// result type of the entire method.
     let ret (x : 'a) = Step<'a, 'a>.OfImmediate(x)
 
-    // The following various flavors of `bind` are for sequencing tasks with the continuations
+    // The following flavors of `bind` are for sequencing tasks with the continuations
     // that should run following them. They all follow pretty much the same formula.
 
     let bindTask (task : 'a Task) (continuation : 'a -> Step<'b, 'm>) =
         let taskAwaiter = task.GetAwaiter()
-        if taskAwaiter.IsCompleted then
+        if taskAwaiter.IsCompleted then // Proceed to the next step based on the result we already have.
             taskAwaiter.GetResult() |> continuation
-        else
+        else // Await and continue later when a result is available.
             StepContinuation
                 ( taskAwaiter
                 , (fun () -> taskAwaiter.GetResult() |> continuation)
@@ -153,21 +154,32 @@ module TaskBuilder =
             , continuation
             ) |> Step< ^c, ^m >.OfContinuation
 
+    /// Chains together a step with its following step.
+    /// Note that this requires that the first step has no result.
+    /// This prevents constructs like `task { return 1; return 2; }`.
     let rec combine (step : Step<unit, 'm>) (continuation : unit -> Step<'b, 'm>) =
         let stepContinuation = step.Continuation
-        if isNull stepContinuation then
+        if isNull stepContinuation then // The preceding step is just a value, so we can ignore it.
             continuation()
         else
             let stepNext = stepContinuation.NextStep
             StepContinuation
-                ( stepContinuation.Awaitable
+                ( // We can reuse the awaitable.
+                  stepContinuation.Awaitable
+                  // ... but we need to glue our continuation onto the next step of the one we're wrapping.
                 , fun () -> combine (stepNext()) continuation
                 ) |> Step<'b, 'm>.OfContinuation
 
+    /// Builds a step that executes the body while the condition predicate is true.
     let rec whileLoop (cond : unit -> bool) (body : unit -> Step<unit, 'm>) =
-        if cond() then combine (body()) (fun () -> whileLoop cond body)
+        if cond() then
+            combine
+                (body()) // We're running the body this time, at least.
+                (fun () -> whileLoop cond body) // After it's done, repeat the loop.
         else zero()
 
+    /// The recursive part of a try/with statement. Nothing fancy here, just chains the try/with back
+    /// onto the continuation it's given.
     let rec tryWithCore (stepContinuation : StepContinuation<'a, 'm>) (catch : exn -> Step<'a, 'm>) =
         let stepNext = stepContinuation.NextStep
         StepContinuation
@@ -175,6 +187,8 @@ module TaskBuilder =
             , fun () -> tryWithNonInline stepNext catch
             ) |> Step<'a, 'm>.OfContinuation
 
+    /// Wraps a step in a try/with. This catches exceptions both in the evaluation of the function
+    /// to retrieve the step, and in the continuation of the step (if any).
     and inline tryWith (step : unit -> Step<'a, 'm>) (catch : exn -> Step<'a, 'm>) =
         try
             let step = step()
@@ -187,6 +201,8 @@ module TaskBuilder =
 
     and tryWithNonInline step catch = tryWith step catch
 
+    /// Similar to tryWithCore, this functions only job is to chain the tryFinally onto
+    /// a continuation.
     let rec tryFinallyCore (stepContinuation : StepContinuation<'a, 'm>) (fin : unit -> unit) =
         let stepNext = stepContinuation.NextStep
         StepContinuation
@@ -194,18 +210,26 @@ module TaskBuilder =
             , fun () -> tryFinallyNonInline stepNext fin
             ) |> Step<'a, 'm>.OfContinuation
 
+    /// Wraps a step in a try/finally. This catches exceptions both in the evaluation of the function
+    /// to retrieve the step, and in the continuation of the step (if any).
     and inline tryFinally (step : unit -> Step<'a, 'm>) fin =
-        try
-            let step = step()
-            if isNull step.Continuation then
+        let step =
+            try step()
+            // Important point: we use a try/with, not a try/finally, to implement tryFinally.
+            // The reason for this is that if we're just building a continuation, we definitely *shouldn't*
+            // execute the `fin()` part yet -- the actual execution of the asynchronous code hasn't completed!
+            with
+            | _ ->
                 fin()
-                step
-            else
-                tryFinallyCore step.Continuation fin
-        with
-        | _ ->
-            fin()
-            reraise()
+                reraise()
+        if isNull step.Continuation then
+            // We're at no risk of running fin() twice here since where it's run above, it's followed by reraise().
+            fin() 
+            step
+        else
+            // Have to wrap the continuation with the same finally block (which hasn't run yet).
+            tryFinallyCore step.Continuation fin
+
 
     and tryFinallyNonInline step fin = tryFinally step fin
 
