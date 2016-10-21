@@ -166,7 +166,7 @@ module TaskBuilder =
             , continuation
             ) |> Step< ^c, ^m >.OfContinuation
 
-    let rec combine (step : Step<'a, 'm>) (continuation : unit -> Step<'b, 'm>) =
+    let rec combine (step : Step<unit, 'm>) (continuation : unit -> Step<'b, 'm>) =
         let stepContinuation = step.Continuation
         if isNull stepContinuation then
             continuation()
