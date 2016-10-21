@@ -52,7 +52,10 @@ module TaskBuilder =
     /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
     and StepStateMachine<'m>(step : Step<'m, 'm>) =
         let mutable methodBuilder = AsyncTaskMethodBuilder<'m>()
+        /// The step we're getting ready to run.
         let mutable step = step
+        /// The continuation we left off awaiting on our last MoveNext(), if any.
+        /// This will be non-null on every MoveNext() except the very first one.
         let mutable continuation = null : StepContinuation<_, _>
 
         /// Start execution as a `Task<'m>`.
@@ -199,6 +202,7 @@ module TaskBuilder =
         with
         | exn -> catch exn
 
+    /// Necessary to be able to use recursively in tryWithCore.
     and tryWithNonInline step catch = tryWith step catch
 
     /// Similar to tryWithCore, this functions only job is to chain the tryFinally onto
@@ -230,16 +234,24 @@ module TaskBuilder =
             // Have to wrap the continuation with the same finally block (which hasn't run yet).
             tryFinallyCore step.Continuation fin
 
-
+    /// Necessary to be able to use recursively in tryFinallyCore.
     and tryFinallyNonInline step fin = tryFinally step fin
 
+    /// Implements a using statement that disposes `disp` after `body` has completed.
     let inline using (disp : #IDisposable) (body : _ -> Step<'a, 'm>) =
-        tryFinally (fun () -> body disp) disp.Dispose
+        // A using statement is just a try/finally with the finally block disposing if non-null.
+        tryFinally
+            (fun () -> body disp)
+            (fun () -> if isNull (box disp) then disp.Dispose())
 
+    /// Implements a loop that runs `body` for each element in `sequence`.
     let forLoop (sequence : 'a seq) (body : 'a -> Step<unit, 'm>) =
+        // A for loop is just a using statement on the sequence's enumerator...
         using (sequence.GetEnumerator())
+            // ... and its body is a while loop that advances the enumerator and runs the body on each element.
             (fun e -> whileLoop e.MoveNext (fun () -> body e.Current))
 
+    /// Runs a step as a task -- with a short-circuit for immediately completed steps.
     let inline run (firstStep : unit -> Step<'m, 'm>) =
         try
             let step = firstStep()
@@ -247,6 +259,9 @@ module TaskBuilder =
                 Task.FromResult(step.ImmediateValue)
             else
                 StepStateMachine<'m>(step).Run()
+        // Any exceptions should go on the task, rather than being thrown from this call.
+        // This matches C# behavior where you won't see an exception until awaiting the task,
+        // even if it failed before reaching the first "await".
         with
         | exn -> Task.FromException<_>(exn)
 
@@ -318,6 +333,7 @@ module TaskBuilder =
 [<AutoOpen>]
 module ContextSensitive =
     /// Builds a `System.Threading.Tasks.Task<'a>` similarly to a C# async/await method.
+    /// Use this like `task { let! taskResult = someTask(); return taskResult.ToString(); }`.
     let task = TaskBuilder.TaskBuilder()
 
 module ContextInsensitive =
