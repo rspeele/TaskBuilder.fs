@@ -25,19 +25,12 @@ module TaskBuilder =
         | Await of ICriticalNotifyCompletion * (unit -> Step<'a>)
         | Return of 'a
     /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
-    and StepStateMachine<'a>(firstStep) =
+    and StepStateMachine<'a>(firstStep) as this =
         let methodBuilder = AsyncTaskMethodBuilder<'a>()
         /// The continuation we left off awaiting on our last MoveNext().
         let mutable continuation = fun () -> firstStep
-
-        /// Start execution as a `Task<'m>`.
-        member this.Run() =
-            let mutable this = this
-            methodBuilder.Start(&this)
-            methodBuilder.Task
-
         /// Return true if we should call `AwaitOnCompleted` on the current awaitable.
-        member inline private __.NextAwaitable() =
+        let nextAwaitable() =
             try
                 match continuation() with
                 | Return r ->
@@ -50,21 +43,22 @@ module TaskBuilder =
             | exn ->
                 methodBuilder.SetException(exn)
                 null
+        let mutable self = this
 
-        /// Proceed to one of three states: result, failure, or awaiting.
-        /// If awaiting, MoveNext() will be called again when the awaitable completes.
-        member this.MoveNext() =
-            match this.NextAwaitable() with
-            | null -> ()
-            | await ->
-                let mutable await = await
-                let mutable this = this
-                // Tell the builder to call us again when this thing is done.
-                methodBuilder.AwaitUnsafeOnCompleted(&await, &this)
-               
+        /// Start execution as a `Task<'m>`.
+        member __.Run() =
+            methodBuilder.Start(&self)
+            methodBuilder.Task
+    
         interface IAsyncStateMachine with
-            member this.MoveNext() = this.MoveNext()
-            member this.SetStateMachine(_) = () // Doesn't really apply since we're a reference type.
+            /// Proceed to one of three states: result, failure, or awaiting.
+            /// If awaiting, MoveNext() will be called again when the awaitable completes.
+            member __.MoveNext() =
+                let mutable await = nextAwaitable()
+                if not (isNull await) then
+                    // Tell the builder to call us again when this thing is done.
+                    methodBuilder.AwaitUnsafeOnCompleted(&await, &self)    
+            member __.SetStateMachine(_) = () // Doesn't really apply since we're a reference type.
 
     /// Used to represent no-ops like the implicit empty "else" branch of an "if" expression.
     let inline zero() = Return ()
