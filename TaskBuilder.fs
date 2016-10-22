@@ -21,11 +21,9 @@ module TaskBuilder =
     /// Represents the state of a computation:
     /// either awaiting something with a continuation,
     /// or completed with a return value.
-    /// The 'a generic parameter is the result type of this step, whereas the 'm generic parameter
-    /// is the result type of the entire `task` block it occurs in.
     type Step<'a> =
-        | Immediate of 'a
         | Continuation of INotifyCompletion * (unit -> Step<'a>)
+        | Immediate of 'a
     /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
     and StepStateMachine<'a>(awaiter, continuation : unit -> Step<'a>) =
         let mutable methodBuilder = AsyncTaskMethodBuilder<'a>()
@@ -76,11 +74,9 @@ module TaskBuilder =
             member this.SetStateMachine(_) = () // Doesn't really apply since we're a reference type.
 
     /// Used to represent no-ops like the implicit empty "else" branch of an "if" expression.
-    /// Notice that this doesn't impose any constraints on the return type of the task block.
     let inline zero() = Immediate ()
 
-    /// Used to return a value. Notice that the result type of this step must be the same as the
-    /// result type of the entire method.
+    /// Used to return a value.
     let inline ret (x : 'a) = Immediate x
 
     // The following flavors of `bind` are for sequencing tasks with the continuations
