@@ -22,8 +22,8 @@ module TaskBuilder =
     /// either awaiting something with a continuation,
     /// or completed with a return value.
     type Step<'a> =
-        | Continuation of ICriticalNotifyCompletion * (unit -> Step<'a>)
-        | Immediate of 'a
+        | Await of ICriticalNotifyCompletion * (unit -> Step<'a>)
+        | Return of 'a
     /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
     and StepStateMachine<'a>(awaiter, continuation : unit -> Step<'a>) =
         let mutable methodBuilder = AsyncTaskMethodBuilder<'a>()
@@ -49,10 +49,10 @@ module TaskBuilder =
             else
                 try
                     match continuation() with
-                    | Immediate r ->
+                    | Return r ->
                         methodBuilder.SetResult(r)
                         false
-                    | Continuation (await, next) ->
+                    | Await (await, next) ->
                         continuation <- next
                         awaiter <- await
                         true
@@ -74,10 +74,10 @@ module TaskBuilder =
             member this.SetStateMachine(_) = () // Doesn't really apply since we're a reference type.
 
     /// Used to represent no-ops like the implicit empty "else" branch of an "if" expression.
-    let inline zero() = Immediate ()
+    let inline zero() = Return ()
 
     /// Used to return a value.
-    let inline ret (x : 'a) = Immediate x
+    let inline ret (x : 'a) = Return x
 
     // The following flavors of `bind` are for sequencing tasks with the continuations
     // that should run following them. They all follow pretty much the same formula.
@@ -87,7 +87,7 @@ module TaskBuilder =
         if taskAwaiter.IsCompleted then // Proceed to the next step based on the result we already have.
             taskAwaiter.GetResult() |> continuation
         else // Await and continue later when a result is available.
-            Continuation
+            Await
                 ( taskAwaiter
                 , (fun () -> taskAwaiter.GetResult() |> continuation)
                 )
@@ -95,7 +95,7 @@ module TaskBuilder =
     let inline bindVoidTask (task : Task) (continuation : unit -> Step<'b>) =
         let taskAwaiter = task.GetAwaiter()
         if taskAwaiter.IsCompleted then continuation() else
-        Continuation
+        Await
             ( taskAwaiter
             , continuation
             )
@@ -105,7 +105,7 @@ module TaskBuilder =
         if taskAwaiter.IsCompleted then
             taskAwaiter.GetResult() |> continuation
         else
-            Continuation
+            Await
                 ( taskAwaiter
                 , (fun () -> taskAwaiter.GetResult() |> continuation)
                 )
@@ -113,7 +113,7 @@ module TaskBuilder =
     let inline bindVoidConfiguredTask (task : ConfiguredTaskAwaitable) (continuation : unit -> Step<'b>) =
         let taskAwaiter = task.GetAwaiter()
         if taskAwaiter.IsCompleted then continuation() else
-        Continuation
+        Await
             ( taskAwaiter
             , continuation
             )
@@ -122,7 +122,7 @@ module TaskBuilder =
         bindGenericAwaitable< ^a, ^b, ^c when ^a : (member GetAwaiter : unit -> ^b) and ^b :> ICriticalNotifyCompletion >
         (awt : ^a) (continuation : unit -> Step< ^c >) =
         let taskAwaiter = (^a : (member GetAwaiter : unit -> ^b)(awt))
-        Continuation
+        Await
             ( taskAwaiter
             , continuation
             )
@@ -132,9 +132,9 @@ module TaskBuilder =
     /// This prevents constructs like `task { return 1; return 2; }`.
     let rec combine (step : Step<unit>) (continuation : unit -> Step<'b>) =
         match step with
-        | Immediate _ -> continuation()
-        | Continuation (awaitable, next) ->
-            Continuation
+        | Return _ -> continuation()
+        | Await (awaitable, next) ->
+            Await
                 ( awaitable
                 , fun () -> combine (next()) continuation
                 )
@@ -155,8 +155,8 @@ module TaskBuilder =
     let rec tryWith(step : unit -> Step<'a>) (catch : exn -> Step<'a>) =
         try
             match step() with
-            | Immediate _ as i -> i
-            | Continuation (awaitable, next) -> Continuation (awaitable, fun () -> tryWith next catch)
+            | Return _ as i -> i
+            | Await (awaitable, next) -> Await (awaitable, fun () -> tryWith next catch)
         with
         | exn -> catch exn
 
@@ -173,11 +173,11 @@ module TaskBuilder =
                 fin()
                 reraise()
         match step with
-        | Immediate _ as i ->
+        | Return _ as i ->
             fin()
             i
-        | Continuation (awaitable, next) ->
-            Continuation (awaitable, fun () -> tryFinally next fin)
+        | Await (awaitable, next) ->
+            Await (awaitable, fun () -> tryFinally next fin)
 
     /// Implements a using statement that disposes `disp` after `body` has completed.
     let inline using (disp : #IDisposable) (body : _ -> Step<'a>) =
@@ -197,8 +197,8 @@ module TaskBuilder =
     let inline run (firstStep : unit -> Step<'a>) =
         try
             match firstStep() with
-            | Immediate x -> Task.FromResult(x)
-            | Continuation (awaitable, continuation) ->
+            | Return x -> Task.FromResult(x)
+            | Await (awaitable, continuation) ->
                 StepStateMachine<'a>(awaitable, continuation).Run()
         // Any exceptions should go on the task, rather than being thrown from this call.
         // This matches C# behavior where you won't see an exception until awaiting the task,
