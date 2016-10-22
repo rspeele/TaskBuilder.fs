@@ -3,8 +3,11 @@ open System.Diagnostics
 open System.Threading.Tasks
 open System.IO
 
+[<Literal>]
 let bufferSize = 128
+[<Literal>]
 let writeIterations = 10000
+[<Literal>]
 let executionIterations = 10
 
 module TaskBuilderVersion =
