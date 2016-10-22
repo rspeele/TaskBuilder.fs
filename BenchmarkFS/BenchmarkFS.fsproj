@@ -52,6 +52,13 @@
     </Compile>
     <Compile Include="Program.fs" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BenchmarkCS\BenchmarkCS.csproj">
+      <Name>BenchmarkCS</Name>
+      <Project>{142e16f1-134a-405e-8507-d6bd2c6efdde}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+  </ItemGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
   </PropertyGroup>

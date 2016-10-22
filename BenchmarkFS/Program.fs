@@ -109,6 +109,7 @@ module FSharpAsyncAwaitTaskVersion =
 [<EntryPoint>]
 let main argv = 
     while true do
+        BenchmarkCS.CSharp.Bench().Wait()
         TaskBuilderVersion.bench().Wait()
         FSharpAsyncVersion.bench() |> Async.RunSynchronously
         FSharpAsyncAwaitTaskVersion.bench() |> Async.RunSynchronously

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace BenchmarkCS
 {
-    static class Program
+    public static class CSharp
     {
         private const int BufferSize = 128;
 
@@ -35,7 +35,7 @@ namespace BenchmarkCS
             }
         }
 
-        private static async Task Bench()
+        public static async Task Bench()
         {
             const string tmp = "tmp";
             var sw = new Stopwatch();
@@ -48,11 +48,6 @@ namespace BenchmarkCS
             sw.Stop();
             Console.WriteLine($"C# methods completed in {sw.ElapsedMilliseconds} ms");
             File.Delete(tmp);
-        }
-
-        static void Main(string[] args)
-        {
-            while (true) Bench().Wait();
         }
     }
 }
