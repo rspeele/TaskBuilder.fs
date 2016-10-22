@@ -54,6 +54,8 @@ namespace BenchmarkCS
         }
 
         static void Main(string[] args)
-            => Bench().Wait();
+        {
+            while (true) Bench().Wait();
+        }
     }
 }

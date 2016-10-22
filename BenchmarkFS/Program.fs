@@ -105,7 +105,8 @@ module FSharpAsyncAwaitTaskVersion =
 
 [<EntryPoint>]
 let main argv = 
-    TaskBuilderVersion.bench().Wait()
-    FSharpAsyncVersion.bench() |> Async.RunSynchronously
-    FSharpAsyncAwaitTaskVersion.bench() |> Async.RunSynchronously
+    while true do
+        TaskBuilderVersion.bench().Wait()
+        FSharpAsyncVersion.bench() |> Async.RunSynchronously
+        FSharpAsyncAwaitTaskVersion.bench() |> Async.RunSynchronously
     0 // return an integer exit code

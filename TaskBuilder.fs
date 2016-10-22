@@ -26,7 +26,7 @@ module TaskBuilder =
         | Return of 'a
     /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
     and StepStateMachine<'a>(firstStep) =
-        let mutable methodBuilder = AsyncTaskMethodBuilder<'a>()
+        let methodBuilder = AsyncTaskMethodBuilder<'a>()
         /// The continuation we left off awaiting on our last MoveNext().
         let mutable continuation = fun () -> firstStep
 
@@ -127,10 +127,7 @@ module TaskBuilder =
         match step with
         | Return _ -> continuation()
         | Await (awaitable, next) ->
-            Await
-                ( awaitable
-                , fun () -> combine (next()) continuation
-                )
+            Await(awaitable, fun () -> combine (next()) continuation)
 
     /// Builds a step that executes the body while the condition predicate is true.
     let inline whileLoop (cond : unit -> bool) (body : unit -> Step<unit>) =
