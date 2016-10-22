@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/rspeele/TaskBuilder.fs.svg?branch=master)](https://travis-ci.org/rspeele/TaskBuilder.fs)
+
 ## About
 
 This is a single-file project that implements a
