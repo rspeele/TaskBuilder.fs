@@ -1,0 +1,7 @@
+language: csharp
+mono:
+  - latest
+solution: TestTaskBuilder.sln
+script:
+  - xbuild /p:Configuration=Release TestTaskBuilder.sln
+  - mono ./Test/bin/Release/Test.exe
