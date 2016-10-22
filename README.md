@@ -52,9 +52,9 @@ class X
       {
         await file.WriteLineAsync(String.Format("hello {0}", i));
       }
+      await Console.Out.WriteLineAsync("Done");
+      return name;
     }
-    await Console.Out.WriteLineAsync("Done");
-    return name;
   }
 }
 ```
