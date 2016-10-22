@@ -25,15 +25,10 @@ module TaskBuilder =
         | Await of ICriticalNotifyCompletion * (unit -> Step<'a>)
         | Return of 'a
     /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
-    and StepStateMachine<'a>(awaiter, continuation : unit -> Step<'a>) =
+    and StepStateMachine<'a>(firstStep) =
         let mutable methodBuilder = AsyncTaskMethodBuilder<'a>()
-        /// The thing we're awaiting.
-        let mutable awaiter = awaiter
         /// The continuation we left off awaiting on our last MoveNext().
-        let mutable continuation = continuation
-        /// If true, this is our first MoveNext(), and should await the first
-        /// continuation instead of proceeding to its next step.
-        let mutable initial = true
+        let mutable continuation = fun () -> firstStep
 
         /// Start execution as a `Task<'m>`.
         member this.Run() =
@@ -42,32 +37,30 @@ module TaskBuilder =
             methodBuilder.Task
 
         /// Return true if we should call `AwaitOnCompleted` on the current awaitable.
-        member inline private __.ShouldAwait() =
-            if initial then
-                initial <- false
-                true // We need to await the first so that MoveNext() will be called at the right time.
-            else
-                try
-                    match continuation() with
-                    | Return r ->
-                        methodBuilder.SetResult(r)
-                        false
-                    | Await (await, next) ->
-                        continuation <- next
-                        awaiter <- await
-                        true
-                with
-                | exn ->
-                    methodBuilder.SetException(exn)
-                    false
+        member inline private __.NextAwaitable() =
+            try
+                match continuation() with
+                | Return r ->
+                    methodBuilder.SetResult(r)
+                    null
+                | Await (await, next) ->
+                    continuation <- next
+                    await
+            with
+            | exn ->
+                methodBuilder.SetException(exn)
+                null
 
         /// Proceed to one of three states: result, failure, or awaiting.
         /// If awaiting, MoveNext() will be called again when the awaitable completes.
         member this.MoveNext() =
-            if this.ShouldAwait() then
+            match this.NextAwaitable() with
+            | null -> ()
+            | await ->
+                let mutable await = await
                 let mutable this = this
                 // Tell the builder to call us again when this thing is done.
-                methodBuilder.AwaitUnsafeOnCompleted(&awaiter, &this)
+                methodBuilder.AwaitUnsafeOnCompleted(&await, &this)
                
         interface IAsyncStateMachine with
             member this.MoveNext() = this.MoveNext()
@@ -198,8 +191,8 @@ module TaskBuilder =
         try
             match firstStep() with
             | Return x -> Task.FromResult(x)
-            | Await (awaitable, continuation) ->
-                StepStateMachine<'a>(awaitable, continuation).Run()
+            | Await _ as step ->
+                StepStateMachine<'a>(step).Run()
         // Any exceptions should go on the task, rather than being thrown from this call.
         // This matches C# behavior where you won't see an exception until awaiting the task,
         // even if it failed before reaching the first "await".
