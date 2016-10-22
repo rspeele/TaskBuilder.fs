@@ -74,45 +74,30 @@ module TaskBuilder =
         if taskAwaiter.IsCompleted then // Proceed to the next step based on the result we already have.
             taskAwaiter.GetResult() |> continuation
         else // Await and continue later when a result is available.
-            Await
-                ( taskAwaiter
-                , (fun () -> taskAwaiter.GetResult() |> continuation)
-                )
+            Await (taskAwaiter, (fun () -> taskAwaiter.GetResult() |> continuation))
 
     let inline bindVoidTask (task : Task) (continuation : unit -> Step<'b>) =
         let taskAwaiter = task.GetAwaiter()
         if taskAwaiter.IsCompleted then continuation() else
-        Await
-            ( taskAwaiter
-            , continuation
-            )
+        Await (taskAwaiter, continuation)
 
     let inline bindConfiguredTask (task : 'a ConfiguredTaskAwaitable) (continuation : 'a -> Step<'b>) =
         let taskAwaiter = task.GetAwaiter()
         if taskAwaiter.IsCompleted then
             taskAwaiter.GetResult() |> continuation
         else
-            Await
-                ( taskAwaiter
-                , (fun () -> taskAwaiter.GetResult() |> continuation)
-                )
+            Await (taskAwaiter, (fun () -> taskAwaiter.GetResult() |> continuation))
 
     let inline bindVoidConfiguredTask (task : ConfiguredTaskAwaitable) (continuation : unit -> Step<'b>) =
         let taskAwaiter = task.GetAwaiter()
         if taskAwaiter.IsCompleted then continuation() else
-        Await
-            ( taskAwaiter
-            , continuation
-            )
+        Await (taskAwaiter, continuation)
 
     let inline
         bindGenericAwaitable< ^a, ^b, ^c when ^a : (member GetAwaiter : unit -> ^b) and ^b :> ICriticalNotifyCompletion >
         (awt : ^a) (continuation : unit -> Step< ^c >) =
         let taskAwaiter = (^a : (member GetAwaiter : unit -> ^b)(awt))
-        Await
-            ( taskAwaiter
-            , continuation
-            )
+        Await (taskAwaiter, continuation)
 
     /// Chains together a step with its following step.
     /// Note that this requires that the first step has no result.
