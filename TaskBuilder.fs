@@ -23,12 +23,12 @@ module TaskBuilder =
     /// or completed with a return value.
     /// The 'a generic parameter is the result type of this step, whereas the 'm generic parameter
     /// is the result type of the entire `task` block it occurs in.
-    type Step<'a, 'm> =
+    type Step<'a> =
         | Immediate of 'a
-        | Continuation of INotifyCompletion * (unit -> Step<'a, 'm>)
+        | Continuation of INotifyCompletion * (unit -> Step<'a>)
     /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
-    and StepStateMachine<'m>(awaiter, continuation : unit -> Step<'m, 'm>) =
-        let mutable methodBuilder = AsyncTaskMethodBuilder<'m>()
+    and StepStateMachine<'a>(awaiter, continuation : unit -> Step<'a>) =
+        let mutable methodBuilder = AsyncTaskMethodBuilder<'a>()
         /// The thing we're awaiting.
         let mutable awaiter = awaiter
         /// The continuation we left off awaiting on our last MoveNext().
@@ -86,7 +86,7 @@ module TaskBuilder =
     // The following flavors of `bind` are for sequencing tasks with the continuations
     // that should run following them. They all follow pretty much the same formula.
 
-    let inline bindTask (task : 'a Task) (continuation : 'a -> Step<'b, 'm>) =
+    let inline bindTask (task : 'a Task) (continuation : 'a -> Step<'b>) =
         let taskAwaiter = task.GetAwaiter()
         if taskAwaiter.IsCompleted then // Proceed to the next step based on the result we already have.
             taskAwaiter.GetResult() |> continuation
@@ -96,7 +96,7 @@ module TaskBuilder =
                 , (fun () -> taskAwaiter.GetResult() |> continuation)
                 )
 
-    let inline bindVoidTask (task : Task) (continuation : unit -> Step<'b, 'm>) =
+    let inline bindVoidTask (task : Task) (continuation : unit -> Step<'b>) =
         let taskAwaiter = task.GetAwaiter()
         if taskAwaiter.IsCompleted then continuation() else
         Continuation
@@ -104,7 +104,7 @@ module TaskBuilder =
             , continuation
             )
 
-    let inline bindConfiguredTask (task : 'a ConfiguredTaskAwaitable) (continuation : 'a -> Step<'b, 'm>) =
+    let inline bindConfiguredTask (task : 'a ConfiguredTaskAwaitable) (continuation : 'a -> Step<'b>) =
         let taskAwaiter = task.GetAwaiter()
         if taskAwaiter.IsCompleted then
             taskAwaiter.GetResult() |> continuation
@@ -114,7 +114,7 @@ module TaskBuilder =
                 , (fun () -> taskAwaiter.GetResult() |> continuation)
                 )
 
-    let inline bindVoidConfiguredTask (task : ConfiguredTaskAwaitable) (continuation : unit -> Step<'b, 'm>) =
+    let inline bindVoidConfiguredTask (task : ConfiguredTaskAwaitable) (continuation : unit -> Step<'b>) =
         let taskAwaiter = task.GetAwaiter()
         if taskAwaiter.IsCompleted then continuation() else
         Continuation
@@ -123,8 +123,8 @@ module TaskBuilder =
             )
 
     let inline
-        bindGenericAwaitable< ^a, ^b, ^c, ^m when ^a : (member GetAwaiter : unit -> ^b) and ^b :> INotifyCompletion >
-        (awt : ^a) (continuation : unit -> Step< ^c, ^m >) =
+        bindGenericAwaitable< ^a, ^b, ^c when ^a : (member GetAwaiter : unit -> ^b) and ^b :> INotifyCompletion >
+        (awt : ^a) (continuation : unit -> Step< ^c >) =
         let taskAwaiter = (^a : (member GetAwaiter : unit -> ^b)(awt))
         Continuation
             ( taskAwaiter
@@ -134,7 +134,7 @@ module TaskBuilder =
     /// Chains together a step with its following step.
     /// Note that this requires that the first step has no result.
     /// This prevents constructs like `task { return 1; return 2; }`.
-    let rec combine (step : Step<unit, 'm>) (continuation : unit -> Step<'b, 'm>) =
+    let rec combine (step : Step<unit>) (continuation : unit -> Step<'b>) =
         match step with
         | Immediate _ -> continuation()
         | Continuation (awaitable, next) ->
@@ -144,7 +144,7 @@ module TaskBuilder =
                 )
 
     /// Builds a step that executes the body while the condition predicate is true.
-    let inline whileLoop (cond : unit -> bool) (body : unit -> Step<unit, 'm>) =
+    let inline whileLoop (cond : unit -> bool) (body : unit -> Step<unit>) =
         if cond() then
             // Create a self-referencing closure to test whether to repeat the loop on future iterations.
             let rec repeat () =
@@ -156,7 +156,7 @@ module TaskBuilder =
 
     /// Wraps a step in a try/with. This catches exceptions both in the evaluation of the function
     /// to retrieve the step, and in the continuation of the step (if any).
-    let rec tryWith(step : unit -> Step<'a, 'm>) (catch : exn -> Step<'a, 'm>) =
+    let rec tryWith(step : unit -> Step<'a>) (catch : exn -> Step<'a>) =
         try
             match step() with
             | Immediate _ as i -> i
@@ -166,7 +166,7 @@ module TaskBuilder =
 
     /// Wraps a step in a try/finally. This catches exceptions both in the evaluation of the function
     /// to retrieve the step, and in the continuation of the step (if any).
-    let rec tryFinally (step : unit -> Step<'a, 'm>) fin =
+    let rec tryFinally (step : unit -> Step<'a>) fin =
         let step =
             try step()
             // Important point: we use a try/with, not a try/finally, to implement tryFinally.
@@ -184,26 +184,26 @@ module TaskBuilder =
             Continuation (awaitable, fun () -> tryFinally next fin)
 
     /// Implements a using statement that disposes `disp` after `body` has completed.
-    let inline using (disp : #IDisposable) (body : _ -> Step<'a, 'm>) =
+    let inline using (disp : #IDisposable) (body : _ -> Step<'a>) =
         // A using statement is just a try/finally with the finally block disposing if non-null.
         tryFinally
             (fun () -> body disp)
             (fun () -> if not (isNull (box disp)) then disp.Dispose())
 
     /// Implements a loop that runs `body` for each element in `sequence`.
-    let forLoop (sequence : 'a seq) (body : 'a -> Step<unit, 'm>) =
+    let forLoop (sequence : 'a seq) (body : 'a -> Step<unit>) =
         // A for loop is just a using statement on the sequence's enumerator...
         using (sequence.GetEnumerator())
             // ... and its body is a while loop that advances the enumerator and runs the body on each element.
             (fun e -> whileLoop e.MoveNext (fun () -> body e.Current))
 
     /// Runs a step as a task -- with a short-circuit for immediately completed steps.
-    let inline run (firstStep : unit -> Step<'m, 'm>) =
+    let inline run (firstStep : unit -> Step<'a>) =
         try
             match firstStep() with
             | Immediate x -> Task.FromResult(x)
             | Continuation (awaitable, continuation) ->
-                StepStateMachine<'m>(awaitable, continuation).Run()
+                StepStateMachine<'a>(awaitable, continuation).Run()
         // Any exceptions should go on the task, rather than being thrown from this call.
         // This matches C# behavior where you won't see an exception until awaiting the task,
         // even if it failed before reaching the first "await".
@@ -213,8 +213,8 @@ module TaskBuilder =
     type TaskBuilder() =
         // These methods are consistent between the two builders.
         // Unfortunately, inline members do not work with inheritance.
-        member inline __.Delay(f : unit -> Step<_, _>) = f
-        member inline __.Run(f : unit -> Step<'m, 'm>) = run f
+        member inline __.Delay(f : unit -> Step<_>) = f
+        member inline __.Run(f : unit -> Step<'m>) = run f
         member inline __.Zero() = zero()
         member inline __.Return(x) = ret x
         member inline __.ReturnFrom(task) = bindConfiguredTask task ret
@@ -244,8 +244,8 @@ module TaskBuilder =
     type ContextInsensitiveTaskBuilder() =
         // These methods are consistent between the two builders.
         // Unfortunately, inline members do not work with inheritance.
-        member inline __.Delay(f : unit -> Step<_, _>) = f
-        member inline __.Run(f : unit -> Step<'m, 'm>) = run f
+        member inline __.Delay(f : unit -> Step<_>) = f
+        member inline __.Run(f : unit -> Step<'m>) = run f
         member inline __.Zero() = zero()
         member inline __.Return(x) = ret x
         member inline __.ReturnFrom(task) = bindConfiguredTask task ret
