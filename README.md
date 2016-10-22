@@ -20,6 +20,9 @@ asynchronous blocks that behave just like `async` methods in C# do.
 For example, this F# method:
 
 ```fsharp
+open System
+open System.IO
+open System.Linq
 open FSharp.Control.Tasks
 
 type X() =
@@ -38,6 +41,9 @@ type X() =
 Should work exactly the same as this C# method:
 
 ```csharp
+using System
+using System.IO
+using System.Linq
 using System.Threading.Tasks
 
 class X
