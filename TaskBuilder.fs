@@ -22,7 +22,7 @@ module TaskBuilder =
     /// either awaiting something with a continuation,
     /// or completed with a return value.
     type Step<'a> =
-        | Continuation of INotifyCompletion * (unit -> Step<'a>)
+        | Continuation of ICriticalNotifyCompletion * (unit -> Step<'a>)
         | Immediate of 'a
     /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
     and StepStateMachine<'a>(awaiter, continuation : unit -> Step<'a>) =
@@ -67,7 +67,7 @@ module TaskBuilder =
             if this.ShouldAwait() then
                 let mutable this = this
                 // Tell the builder to call us again when this thing is done.
-                methodBuilder.AwaitOnCompleted(&awaiter, &this)
+                methodBuilder.AwaitUnsafeOnCompleted(&awaiter, &this)
                
         interface IAsyncStateMachine with
             member this.MoveNext() = this.MoveNext()
@@ -119,7 +119,7 @@ module TaskBuilder =
             )
 
     let inline
-        bindGenericAwaitable< ^a, ^b, ^c when ^a : (member GetAwaiter : unit -> ^b) and ^b :> INotifyCompletion >
+        bindGenericAwaitable< ^a, ^b, ^c when ^a : (member GetAwaiter : unit -> ^b) and ^b :> ICriticalNotifyCompletion >
         (awt : ^a) (continuation : unit -> Step< ^c >) =
         let taskAwaiter = (^a : (member GetAwaiter : unit -> ^b)(awt))
         Continuation
