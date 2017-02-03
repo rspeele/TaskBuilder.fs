@@ -463,6 +463,44 @@ let test2ndExceptionThrownInFinally() =
     require ranNext "didn't run next"
     require (ranFinally = 1) "didn't run finally exactly once"
 
+let testFixedStackWhileLoop() =
+    let bigNumber = 10000
+    let t =
+        task {
+            let mutable maxDepth = Nullable()
+            let mutable i = 0
+            while i < bigNumber do
+                i <- i + 1
+                do! Task.Yield()
+                if i % 100 = 0 then
+                    let stackDepth = StackTrace().FrameCount
+                    if maxDepth.HasValue && stackDepth > maxDepth.Value then
+                        failwith "Stack depth increased!"
+                    maxDepth <- Nullable(stackDepth)
+            return i
+        }
+    t.Wait()
+    require (t.Result = bigNumber) "didn't get to big number"
+
+let testFixedStackForLoop() =
+    let bigNumber = 10000
+    let mutable ran = false
+    let t =
+        task {
+            let mutable maxDepth = Nullable()
+            for i in Seq.init bigNumber id do
+                do! Task.Yield()
+                if i % 100 = 0 then
+                    let stackDepth = StackTrace().FrameCount
+                    if maxDepth.HasValue && stackDepth > maxDepth.Value then
+                        failwith "Stack depth increased!"
+                    maxDepth <- Nullable(stackDepth)
+            ran <- true
+            return ()
+        }
+    t.Wait()
+    require ran "didn't run all"
+
 [<EntryPoint>]
 let main argv =
     printfn "Running tests..."
@@ -485,5 +523,7 @@ let main argv =
     testExceptionAttachedToTaskWithAwait()
     testExceptionThrownInFinally()
     test2ndExceptionThrownInFinally()
+    testFixedStackWhileLoop()
+    testFixedStackForLoop()
     printfn "Passed all tests!"
     0
