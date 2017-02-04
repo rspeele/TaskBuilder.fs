@@ -28,12 +28,12 @@ open FSharp.Control.Tasks
 type X() =
   static member WriteFile() =
     task {
-      do! Console.Out.WriteLineAsync("Enter a filename:")
+      do! unitTask <| Console.Out.WriteLineAsync("Enter a filename:")
       let! name = Console.In.ReadLineAsync()
       use file = File.CreateText(name)
       for i in Enumerable.Range(0, 100) do
-        do! file.WriteLineAsync(String.Format("hello {0}", i))
-      do! Console.Out.WriteLineAsync("Done")
+        do! unitTask <| file.WriteLineAsync(String.Format("hello {0}", i))
+      do! unitTask <| Console.Out.WriteLineAsync("Done")
       return name
     }
 ```
