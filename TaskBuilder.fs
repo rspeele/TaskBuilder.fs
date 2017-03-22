@@ -173,7 +173,10 @@ module TaskBuilder =
         // This matches C# behavior where you won't see an exception until awaiting the task,
         // even if it failed before reaching the first "await".
         with
-        | exn -> Task.FromException<_>(exn)
+        | exn ->
+            let src = new TaskCompletionSource<_>()
+            src.SetException(exn)
+            src.Task
 
     type UnitTask =
         struct
