@@ -513,6 +513,31 @@ let testTypeInference() =
         }
     t2.Wait()
 
+let testNoStackOverflowWithImmediateResult() =
+    let longLoop =
+        task {
+            let mutable n = 0
+            while n < 100_000 do
+                let! _ = Task.FromResult(0)
+                n <- n + 1
+        }
+    longLoop.Wait()
+
+let testNoStackOverflowWithYieldResult() =
+    let longLoop =
+        task {
+            let mutable n = 0
+            while n < 100_000 do
+                let! _ =
+                    task {
+                        do! Task.Yield()
+                        let! _ = Task.FromResult(0)
+                        n <- n + 1
+                    }
+                n <- n + 1
+        }
+    longLoop.Wait()
+
 [<EntryPoint>]
 let main argv =
     printfn "Running tests..."
@@ -538,5 +563,7 @@ let main argv =
     testFixedStackWhileLoop()
     testFixedStackForLoop()
     testTypeInference()
+    testNoStackOverflowWithImmediateResult()
+    testNoStackOverflowWithYieldResult()
     printfn "Passed all tests!"
     0

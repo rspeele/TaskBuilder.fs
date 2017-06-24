@@ -106,14 +106,19 @@ module TaskBuilder =
         match step with
         | Return _ -> continuation()
         | Await (awaitable, next) ->
-            Await(awaitable, fun () -> combine (next()) continuation)
+            Await (awaitable, fun () -> combine (next()) continuation)
 
     /// Builds a step that executes the body while the condition predicate is true.
-    let inline whileLoop (cond : unit -> bool) (body : unit -> Step<unit>) =
+    let whileLoop (cond : unit -> bool) (body : unit -> Step<unit>) =
         if cond() then
             // Create a self-referencing closure to test whether to repeat the loop on future iterations.
             let rec repeat () =
-                if cond() then combine (body()) repeat
+                if cond() then
+                    let body = body()
+                    match body with
+                    | Return _ -> repeat()
+                    | Await (awaitable, next) ->
+                        Await (awaitable, fun () -> combine (next()) repeat)
                 else zero()
             // Run the body the first time and chain it to the repeat logic.
             combine (body()) repeat
