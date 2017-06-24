@@ -423,6 +423,7 @@ let testExceptionThrownInFinally() =
             try
                 ranInitial <- true
                 do! Task.Yield()
+                Thread.Sleep(100) // shouldn't be blocking so we should get through to requires before this finishes
                 ranNext <- true
             finally
                 ranFinally <- ranFinally + 1
@@ -447,6 +448,7 @@ let test2ndExceptionThrownInFinally() =
             try
                 ranInitial <- true
                 do! Task.Yield()
+                Thread.Sleep(100) // shouldn't be blocking so we should get through to requires before this finishes
                 ranNext <- true
                 failtest "uhoh"
             finally
