@@ -132,8 +132,8 @@ let testNestedCatching() =
             | TestException msg as exn ->
                 caughtOuter <- counter
                 raise exn
-            | _ ->
-                require false "invalid msg type"
+            | e ->
+                require false (sprintf "invalid msg type %s" e.Message)
         }
     try
         t2.Wait()
@@ -540,6 +540,65 @@ let testNoStackOverflowWithYieldResult() =
         }
     longLoop.Wait()
 
+let testNoStackOverflowWithRecursion() =
+    let longLoop =
+        task {
+            let rec loop n =
+                task {
+                    if n < 100_000 then
+                        do! Task.Yield()
+                        let! _ = Task.FromResult(0)
+                        return! loop (n + 1)
+                    else
+                        return ()
+                }
+            return! loop 0
+        }
+    longLoop.Wait()
+
+let testTryOverReturnFrom() =
+    let inner() =
+        task {
+            do! Task.Yield()
+            failtest "inner"
+            return 1
+        }
+    let t =
+        task {
+            try
+                do! Task.Yield()
+                return! inner()
+            with
+            | TestException "inner" -> return 2
+        }
+    require (t.Result = 2) "didn't catch"
+
+let testUnitTaskWrapper() =
+    let failure = new TaskCompletionSource<obj>()
+    failure.SetException(TestException "test")
+    let untyped = failure.Task :> Task
+    let wrapped = (unitTask untyped).ToTypedTask()
+    let catcher =
+        task {
+            try
+                let! w = wrapped
+                return ()
+            with
+            | TestException "test" -> ()
+        }
+    catcher.Wait()
+
+let testManualTailRecursion() =
+    // note: this simple example grows the heap, just like our tail recursion
+    // in testNoStackOverflowWithRecursion.
+    // is there a better way that does not use up memory? if so, can we change our builder to use it?
+    let rec continueWithChain n =
+        Task.FromResult(n).ContinueWith(fun (t : _ Task) ->
+            if n > 100_000 then
+                continueWithChain (n + 1)
+            else Task.FromResult(n)).Unwrap()
+    (continueWithChain 0).Wait()
+
 [<EntryPoint>]
 let main argv =
     printfn "Running tests..."
@@ -567,5 +626,9 @@ let main argv =
     testTypeInference()
     testNoStackOverflowWithImmediateResult()
     testNoStackOverflowWithYieldResult()
+    testNoStackOverflowWithRecursion()
+    testManualTailRecursion()
+    testTryOverReturnFrom()
+    testUnitTaskWrapper()
     printfn "Passed all tests!"
     0
