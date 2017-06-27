@@ -519,7 +519,7 @@ let testNoStackOverflowWithImmediateResult() =
     let longLoop =
         task {
             let mutable n = 0
-            while n < 100_000 do
+            while n < 10_000 do
                 n <- n + 1
                 return! Task.FromResult(())
         }
@@ -529,7 +529,7 @@ let testNoStackOverflowWithYieldResult() =
     let longLoop =
         task {
             let mutable n = 0
-            while n < 100_000 do
+            while n < 10_000 do
                 let! _ =
                     task {
                         do! Task.Yield()
@@ -594,7 +594,7 @@ let testManualTailRecursion() =
     // is there a better way that does not use up memory? if so, can we change our builder to use it?
     let rec continueWithChain n =
         Task.FromResult(n).ContinueWith(fun (t : _ Task) ->
-            if n > 100_000 then
+            if n > 10_000 then
                 continueWithChain (n + 1)
             else Task.FromResult(n)).Unwrap()
     (continueWithChain 0).Wait()
