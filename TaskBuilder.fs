@@ -25,12 +25,9 @@ module TaskBuilder =
         | Await of ICriticalNotifyCompletion * (unit -> Step<'a>)
         | Return of 'a
         | ReturnFrom of 'a Task
-    and StepResult<'a> =
-        | ReturnValue of 'a
-        | ReturnTail of 'a Task
     /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
     and StepStateMachine<'a>(firstStep) as this =
-        let methodBuilder = AsyncTaskMethodBuilder<'a StepResult>()
+        let methodBuilder = AsyncTaskMethodBuilder<'a Task>()
         /// The continuation we left off awaiting on our last MoveNext().
         let mutable continuation = fun () -> firstStep
         /// Return true if we should call `AwaitOnCompleted` on the current awaitable.
@@ -38,10 +35,10 @@ module TaskBuilder =
             try
                 match continuation() with
                 | Return r ->
-                    methodBuilder.SetResult(ReturnValue r)
+                    methodBuilder.SetResult(Task.FromResult(r))
                     null
                 | ReturnFrom t ->
-                    methodBuilder.SetResult(ReturnTail t)
+                    methodBuilder.SetResult(t)
                     null
                 | Await (await, next) ->
                     continuation <- next
@@ -198,22 +195,6 @@ module TaskBuilder =
             // ... and its body is a while loop that advances the enumerator and runs the body on each element.
             (fun e -> whileLoop e.MoveNext (fun () -> body e.Current))
 
-    let private continuation (task : _ Task) =
-        task.Dispose()
-        match task.Status with
-        | TaskStatus.Faulted ->
-            let src = new TaskCompletionSource<_>()
-            src.SetException(unwrapException task.Exception)
-            src.Task
-        | TaskStatus.Canceled ->
-            let src = new TaskCompletionSource<_>()
-            src.SetCanceled()
-            src.Task
-        | _ ->
-            match task.Result with
-            | ReturnValue r -> Task.FromResult(r)
-            | ReturnTail tail -> tail
-
     /// Runs a step as a task -- with a short-circuit for immediately completed steps.
     let run (firstStep : unit -> Step<'a>) =
         try
@@ -221,10 +202,7 @@ module TaskBuilder =
             | Return x -> Task.FromResult(x)
             | ReturnFrom t -> t
             | Await _ as step ->
-                StepStateMachine<'a>(step)
-                    .Run()
-                    .ContinueWith(continuation, TaskContinuationOptions.DenyChildAttach)
-                    .Unwrap()
+                StepStateMachine<'a>(step).Run().Unwrap()
         // Any exceptions should go on the task, rather than being thrown from this call.
         // This matches C# behavior where you won't see an exception until awaiting the task,
         // even if it failed before reaching the first "await".

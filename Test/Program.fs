@@ -520,8 +520,8 @@ let testNoStackOverflowWithImmediateResult() =
         task {
             let mutable n = 0
             while n < 100_000 do
-                let! _ = Task.FromResult(0)
                 n <- n + 1
+                return! Task.FromResult(())
         }
     longLoop.Wait()
 
@@ -545,7 +545,7 @@ let testNoStackOverflowWithRecursion() =
         task {
             let rec loop n =
                 task {
-                    if n < 100_000 then
+                    if n < 10_000 then
                         do! Task.Yield()
                         let! _ = Task.FromResult(0)
                         return! loop (n + 1)
