@@ -25,12 +25,12 @@ module TaskBuilder =
         | Await of ICriticalNotifyCompletion * (unit -> Step<'a>)
         | Return of 'a
         | ReturnFrom of 'a Task
-    /// Implements the machinery of running a `Step<'m, 'm>` as a `Task<'m>`.
+    /// Implements the machinery of running a `Step<'m, 'm>` as a task returning a continuation task.
     and StepStateMachine<'a>(firstStep) as this =
         let methodBuilder = AsyncTaskMethodBuilder<'a Task>()
         /// The continuation we left off awaiting on our last MoveNext().
         let mutable continuation = fun () -> firstStep
-        /// Return true if we should call `AwaitOnCompleted` on the current awaitable.
+        /// Returns next pending awaitable or null if exiting (including tail call).
         let nextAwaitable() =
             try
                 match continuation() with
@@ -49,7 +49,7 @@ module TaskBuilder =
                 null
         let mutable self = this
 
-        /// Start execution as a `Task<'m>`.
+        /// Start execution as a `Task<Task<'a>>`.
         member __.Run() =
             methodBuilder.Start(&self)
             methodBuilder.Task
@@ -201,8 +201,7 @@ module TaskBuilder =
             match firstStep() with
             | Return x -> Task.FromResult(x)
             | ReturnFrom t -> t
-            | Await _ as step ->
-                StepStateMachine<'a>(step).Run().Unwrap()
+            | Await _ as step -> StepStateMachine<'a>(step).Run().Unwrap()
         // Any exceptions should go on the task, rather than being thrown from this call.
         // This matches C# behavior where you won't see an exception until awaiting the task,
         // even if it failed before reaching the first "await".
