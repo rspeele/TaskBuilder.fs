@@ -540,12 +540,13 @@ let testNoStackOverflowWithYieldResult() =
         }
     longLoop.Wait()
 
-let testNoStackOverflowWithRecursion() =
-    let longLoop =
+let testSmallTailRecursion() =
+    let shortLoop =
         task {
             let rec loop n =
                 task {
-                    if n < 10_000 then
+                    // larger N would stack overflow on Mono, eat heap mem on MS .NET
+                    if n < 1000 then
                         do! Task.Yield()
                         let! _ = Task.FromResult(0)
                         return! loop (n + 1)
@@ -554,7 +555,7 @@ let testNoStackOverflowWithRecursion() =
                 }
             return! loop 0
         }
-    longLoop.Wait()
+    shortLoop.Wait()
 
 let testTryOverReturnFrom() =
     let inner() =
@@ -616,8 +617,9 @@ let main argv =
         testTypeInference()
         testNoStackOverflowWithImmediateResult()
         testNoStackOverflowWithYieldResult()
-        // currently fails on Mono D:
-        // testNoStackOverflowWithRecursion()
+        // we don't support TCO, so large tail recursions will stack overflow
+        // or at least use O(n) heap. but small ones should at least function OK.
+        testSmallTailRecursion()
         testTryOverReturnFrom()
         testUnitTaskWrapper()
         printfn "Passed all tests!"
