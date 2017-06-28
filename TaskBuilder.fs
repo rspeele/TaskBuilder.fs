@@ -24,6 +24,7 @@ module TaskBuilder =
     type Step<'a> =
         | Await of ICriticalNotifyCompletion * (unit -> Step<'a>)
         | Return of 'a
+        /// We model tail calls explicitly, but still can't run them without O(n) memory usage.
         | ReturnFrom of 'a Task
     /// Implements the machinery of running a `Step<'m, 'm>` as a task returning a continuation task.
     and StepStateMachine<'a>(firstStep) as this =
@@ -175,7 +176,7 @@ module TaskBuilder =
                 try
                     awaitable.GetResult() |> Return
                 with
-                | exn ->
+                | _ ->
                     fin()
                     reraise())
         | Await (awaitable, next) ->
@@ -201,7 +202,7 @@ module TaskBuilder =
             match firstStep() with
             | Return x -> Task.FromResult(x)
             | ReturnFrom t -> t
-            | Await _ as step -> StepStateMachine<'a>(step).Run().Unwrap()
+            | Await _ as step -> StepStateMachine<'a>(step).Run().Unwrap() // sadly can't do tail recursion
         // Any exceptions should go on the task, rather than being thrown from this call.
         // This matches C# behavior where you won't see an exception until awaiting the task,
         // even if it failed before reaching the first "await".
