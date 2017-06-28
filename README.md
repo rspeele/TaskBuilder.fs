@@ -94,3 +94,27 @@ and don't need to interact with thread-unsafe things like Windows forms controls
 If you're not sure whether you want to use this version of the builder,
 reading [this MSDN article](https://msdn.microsoft.com/en-us/magazine/jj991977.aspx)
 may help.
+
+## Tail calls are not optimized
+
+In F# it is idiomatic to use [tail
+recursion](https://en.wikipedia.org/wiki/Tail_call) to implement loops more
+complex than a simple for or while.
+
+This works with some computation expressions (like the built-in F# `async`
+builder), but _not_ with TaskBuilder.fs. As far as I know it is not possible to
+make this work with TPL tasks. C# async/await function are not tail-call
+optimized either, so at least this is consistent.
+
+TaskBuilder _does_ model tail calls specially, and the `AsyncMethodBuilder` it
+uses produces a `Task<Task<T>>`, where the inner task is the one in tail
+position, if any. When not tail calling, the inner task is
+`Task.FromResult(returnValue)`. It is just not possible to convert that
+`Task<Task<T>>` to a `Task<T>` without it using more memory with each iteration.
+If I'm wrong about this I would love an explanation.
+
+The current implementation uses `Task.Unwrap()`. On .NET framework on Windows,
+this uses O(n) heap memory and may reach an OutOfMemoryException, but does not
+stack overflow. On Mono, it stack overflows when the innermost task completes,
+running through the chain of callbacks to deliver the result outwards.
+
