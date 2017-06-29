@@ -300,3 +300,14 @@ module ContextInsensitive =
     let task = TaskBuilder.ContextInsensitiveTaskBuilder()
     let inline unitTask (t : Task) = t.ConfigureAwait(false)
 
+
+[<AutoOpen>]
+/// Extension methods have a lower priority than actual members,
+/// so this way type inference will prefer the Task<'T> overload over the non-generic Task overload defined here.
+module LowPriorityExtensions =
+    open TaskBuilder
+    type TaskBuilder with
+        member inline self.Bind(t:Task, continuation) = self.Bind (UnitTask t, continuation)
+        member inline self.ReturnFrom(t : Task) = self.ReturnFrom(UnitTask t)
+    type ContextInsensitiveTaskBuilder with
+        member inline self.Bind(t:Task, continuation) = self.Bind (t.ConfigureAwait(false), continuation)
