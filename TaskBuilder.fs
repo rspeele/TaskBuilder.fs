@@ -89,21 +89,41 @@ module TaskBuilder =
         //     }
 
         static member inline GenericAwait< ^abl, ^awt, ^inp
-                                                when ^abl : (member GetAwaiter : unit -> ^awt)
-                                                and ^awt :> ICriticalNotifyCompletion 
-                                                and ^awt : (member get_IsCompleted : unit -> bool)
-                                                and ^awt : (member GetResult : unit -> 'inp) >
-            (abl : ^abl, continuation : ^inp -> Step< ^out >) : Step< 'out > =
+                                            when ^abl : (member GetAwaiter : unit -> ^awt)
+                                            and ^awt :> ICriticalNotifyCompletion 
+                                            and ^awt : (member get_IsCompleted : unit -> bool)
+                                            and ^awt : (member GetResult : unit -> ^inp) >
+            (abl : ^abl, continuation : ^inp -> 'out Step) : 'out Step =
                 let awt = (^abl : (member GetAwaiter : unit -> ^awt)(abl)) // get an awaiter from the awaitable
                 if (^awt : (member get_IsCompleted : unit -> bool)(awt)) then // shortcut to continue immediately
                     continuation (^awt : (member GetResult : unit -> ^inp)(awt))
                 else
                     Await (awt, fun () -> continuation (^awt : (member GetResult : unit -> ^inp)(awt)))
 
+        static member inline GenericAwaitConfigureFalse< ^tsk, ^abl, ^awt, ^inp
+                                                        when ^tsk : (member ConfigureAwait : bool -> ^abl)
+                                                        and ^abl : (member GetAwaiter : unit -> ^awt)
+                                                        and ^awt :> ICriticalNotifyCompletion 
+                                                        and ^awt : (member get_IsCompleted : unit -> bool)
+                                                        and ^awt : (member GetResult : unit -> ^inp) >
+            (tsk : ^tsk, continuation : ^inp -> 'out Step) : 'out Step =
+                let abl = (^tsk : (member ConfigureAwait : bool -> ^abl)(tsk, false))
+                Binder<'out>.GenericAwait(abl, continuation)
+
     /// Special case of the above for `Task<'a>`. Have to write this out by hand to avoid confusing the compiler
     /// trying to decide between satisfying the constraints with `Task` or `Task<'a>`.
     let inline bindTask (task : 'a Task) (continuation : 'a -> Step<'b>) =
         let awt = task.GetAwaiter()
+        if awt.IsCompleted then // Proceed to the next step based on the result we already have.
+            continuation(awt.GetResult())
+        else // Await and continue later when a result is available.
+            Await (awt, (fun () -> continuation(awt.GetResult())))
+
+    /// Special case of the above for `Task<'a>`, for the context-insensitive builder.
+    /// Have to write this out by hand to avoid confusing the compiler thinking our built-in bind method
+    /// defined on the builder has fancy generic constraints on inp and out parameters.
+    let inline bindTaskConfigureFalse (task : 'a Task) (continuation : 'a -> Step<'b>) =
+        let awt = task.ConfigureAwait(false).GetAwaiter()
         if awt.IsCompleted then // Proceed to the next step based on the result we already have.
             continuation(awt.GetResult())
         else // Await and continue later when a result is available.
@@ -239,7 +259,7 @@ module TaskBuilder =
 
         // We have to have a dedicated overload for Task<'a> so the compiler doesn't get confused.
         // Everything else can use bindGenericAwaitable via an extension member (defined later).
-        member inline __.Bind(task : _ Task, continuation) =
+        member inline __.Bind(task : 'a Task, continuation : 'a -> 'b Step) : 'b Step =
             bindTask task continuation
 
     type ContextInsensitiveTaskBuilder() =
@@ -261,8 +281,8 @@ module TaskBuilder =
 
         // We have to have a dedicated overload for Task<'a> so the compiler doesn't get confused.
         // Everything else can use bindGenericAwaitable via an extension member (defined later).
-        member inline __.Bind(task : _ Task, continuation : _ -> 'a Step) : 'a Step =
-            Binder<'a>.GenericAwait(task.ConfigureAwait(continueOnCapturedContext = false), continuation)
+        member inline __.Bind(task : 'a Task, continuation : 'a -> 'b Step) : 'b Step =
+            bindTaskConfigureFalse task continuation
 
 // Don't warn about our use of the "obsolete" module we just defined (see notes at start of file).
 #nowarn "44"
@@ -306,9 +326,7 @@ module ContextInsensitive =
     module HigherPriorityBinds =
         // When it's possible for these to work, the compiler should prefer them since they shadow the ones above.
         type TaskBuilder.ContextInsensitiveTaskBuilder with
-            member inline this.ReturnFrom(configurableTaskLike : ^tsk) =
-                let configured = (^tsk : (member ConfigureAwait : bool -> ^cfg)(configurableTaskLike, false))
-                TaskBuilder.Binder<_>.GenericAwait(configured, TaskBuilder.ret)
-            member inline this.Bind(configurableTaskLike : ^tsk, continuation) =
-                let configured = (^tsk : (member ConfigureAwait : bool -> ^cfg)(configurableTaskLike, false))
-                TaskBuilder.Binder<_>.GenericAwait(configured, continuation)
+            member inline this.ReturnFrom(configurableTaskLike) =
+                TaskBuilder.Binder<_>.GenericAwaitConfigureFalse(configurableTaskLike, TaskBuilder.ret)
+            member inline this.Bind(configurableTaskLike, continuation : _ -> 'a TaskBuilder.Step) : 'a TaskBuilder.Step =
+                TaskBuilder.Binder<'a>.GenericAwaitConfigureFalse(configurableTaskLike, continuation)
