@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25420.1
+# Visual Studio 15
+VisualStudioVersion = 15.0.26430.14
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Test", "Test\Test.fsproj", "{71220903-DA6A-4208-A3B3-2E24D6CFBBD1}"
 EndProject
@@ -14,6 +14,8 @@ EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BenchmarkFS", "BenchmarkFS\BenchmarkFS.fsproj", "{85101878-6330-48DC-8455-DD5366F2D6B1}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BenchmarkCS", "BenchmarkCS\BenchmarkCS.csproj", "{142E16F1-134A-405E-8507-D6BD2C6EFDDE}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "TestValueTask", "TestValueTask\TestValueTask.fsproj", "{D4FE81B6-4E7E-47D9-A84A-1C92837FFDA8}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{142E16F1-134A-405E-8507-D6BD2C6EFDDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{142E16F1-134A-405E-8507-D6BD2C6EFDDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{142E16F1-134A-405E-8507-D6BD2C6EFDDE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D4FE81B6-4E7E-47D9-A84A-1C92837FFDA8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D4FE81B6-4E7E-47D9-A84A-1C92837FFDA8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D4FE81B6-4E7E-47D9-A84A-1C92837FFDA8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D4FE81B6-4E7E-47D9-A84A-1C92837FFDA8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
