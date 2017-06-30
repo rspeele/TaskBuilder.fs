@@ -266,6 +266,8 @@ module ContextSensitive =
     [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
     let inline unitTask t = TaskBuilder.UnitTask(t)
 
+    // These are fallbacks when the Bind and ReturnFrom on the builder object itself don't apply.
+    // This is how we support binding arbitrary task-like types.
     type TaskBuilder.TaskBuilder with
         member inline this.ReturnFrom(taskLike) =
             TaskBuilder.bindGenericAwaitable taskLike TaskBuilder.ret
@@ -282,6 +284,8 @@ module ContextInsensitive =
     [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
     let inline unitTask (t : Task) = t.ConfigureAwait(false)
 
+    // These are fallbacks when the Bind and ReturnFrom on the builder object itself don't apply.
+    // This is how we support binding arbitrary task-like types.
     type TaskBuilder.ContextInsensitiveTaskBuilder with
         member inline this.ReturnFrom(taskLike) =
             TaskBuilder.bindGenericAwaitable taskLike TaskBuilder.ret
@@ -290,6 +294,7 @@ module ContextInsensitive =
     
     [<AutoOpen>]
     module HigherPriorityBinds =
+        // When it's possible for these to work, the compiler should prefer them since they shadow the ones above.
         type TaskBuilder.ContextInsensitiveTaskBuilder with
             member inline this.ReturnFrom(configurableTaskLike : ^tsk) =
                 let configured = (^tsk : (member ConfigureAwait : bool -> ^cfg)(configurableTaskLike, false))

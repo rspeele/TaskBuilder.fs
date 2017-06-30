@@ -12,10 +12,8 @@ open System
 open System.Collections
 open System.Collections.Generic
 open System.Diagnostics
-open System.Linq
 open System.Threading
 open System.Threading.Tasks
-open System.IO
 open FSharp.Control.Tasks
 
 exception TestException of string
@@ -574,6 +572,18 @@ let testTryOverReturnFrom() =
         }
     require (t.Result = 2) "didn't catch"
 
+#nowarn "44" // we're going to use obsolete stuff here
+let testCompatibilityWithOldUnitTask() =
+    let uTask =
+        task {
+            do! unitTask <| Task.Delay(1)
+            do! unitTask <| Task.Delay(1)
+            let! () = unitTask <| Task.Delay(1)
+            return 1
+        }
+    let r = uTask.Result
+    require (r = 1) "weird result"
+
 [<EntryPoint>]
 let main argv =
     printfn "Running tests..."
@@ -606,6 +616,7 @@ let main argv =
         // or at least use O(n) heap. but small ones should at least function OK.
         testSmallTailRecursion()
         testTryOverReturnFrom()
+        testCompatibilityWithOldUnitTask()
         printfn "Passed all tests!"
     with
     | exn ->
