@@ -16,7 +16,7 @@ module TaskBuilderVersion =
             let junk = Array.zeroCreate bufferSize
             use file = File.Create(path)
             for i = 1 to writeIterations do
-                do! unitTask <| file.WriteAsync(junk, 0, junk.Length)
+                do! file.WriteAsync(junk, 0, junk.Length)
         }
 
     let readFile path =

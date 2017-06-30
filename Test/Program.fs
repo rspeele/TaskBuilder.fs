@@ -36,7 +36,7 @@ let testDelay() =
     let mutable x = 0
     let t =
         task {
-            do! unitTask <| Task.Delay(50)
+            do! Task.Delay(50)
             x <- x + 1
         }
     require (x = 0) "task already ran"
@@ -47,7 +47,7 @@ let testNoDelay() =
     let t =
         task {
             x <- x + 1
-            do! unitTask <| Task.Delay(5)
+            do! Task.Delay(5)
             x <- x + 1
         }
     require (x = 1) "first part didn't run yet"
@@ -73,10 +73,10 @@ let testCatching1() =
     let t =
         task {
             try
-                do! unitTask <| Task.Delay(0)
+                do! Task.Delay(0)
                 failtest "hello"
                 x <- 1
-                do! unitTask <| Task.Delay(100)
+                do! Task.Delay(100)
             with
             | TestException msg ->
                 require (msg = "hello") "message tampered"
@@ -97,7 +97,7 @@ let testCatching2() =
                 do! Task.Yield() // can't skip through this
                 failtest "hello"
                 x <- 1
-                do! unitTask <| Task.Delay(100)
+                do! Task.Delay(100)
             with
             | TestException msg ->
                 require (msg = "hello") "message tampered"
@@ -150,7 +150,7 @@ let testTryFinallyHappyPath() =
         task {
             try
                 require (not ran) "ran way early"
-                do! unitTask <| Task.Delay(100)
+                do! Task.Delay(100)
                 require (not ran) "ran kinda early"
             finally
                 ran <- true
@@ -164,7 +164,7 @@ let testTryFinallySadPath() =
         task {
             try
                 require (not ran) "ran way early"
-                do! unitTask <| Task.Delay(100)
+                do! Task.Delay(100)
                 require (not ran) "ran kinda early"
                 failtest "uhoh"
             finally
@@ -183,7 +183,7 @@ let testTryFinallyCaught() =
             try
                 try
                     require (not ran) "ran way early"
-                    do! unitTask <| Task.Delay(100)
+                    do! Task.Delay(100)
                     require (not ran) "ran kinda early"
                     failtest "uhoh"
                 finally
@@ -201,7 +201,7 @@ let testUsing() =
         task {
             use d = { new IDisposable with member __.Dispose() = disposed <- true }
             require (not disposed) "disposed way early"
-            do! unitTask <| Task.Delay(100)
+            do! Task.Delay(100)
             require (not disposed) "disposed kinda early"
         }
     t.Wait()
@@ -214,14 +214,14 @@ let testUsingFromTask() =
         task {
             use! d =
                 task {
-                    do! unitTask <| Task.Delay(50)
+                    do! Task.Delay(50)
                     use i = { new IDisposable with member __.Dispose() = disposedInner <- true }
                     require (not disposed && not disposedInner) "disposed inner early"
                     return { new IDisposable with member __.Dispose() = disposed <- true }
                 }
             require disposedInner "did not dispose inner after task completion"
             require (not disposed) "disposed way early"
-            do! unitTask <| Task.Delay(50)
+            do! Task.Delay(50)
             require (not disposed) "disposed kinda early"
         }
     t.Wait()
@@ -235,7 +235,7 @@ let testUsingSadPath() =
             try
                 use! d =
                     task {
-                        do! unitTask <| Task.Delay(50)
+                        do! Task.Delay(50)
                         use i = { new IDisposable with member __.Dispose() = disposedInner <- true }
                         failtest "uhoh"
                         require (not disposed && not disposedInner) "disposed inner early"
@@ -246,7 +246,7 @@ let testUsingSadPath() =
             | TestException msg ->
                 require disposedInner "did not dispose inner after task completion"
                 require (not disposed) "disposed way early"
-                do! unitTask <| Task.Delay(50)
+                do! Task.Delay(50)
                 require (not disposed) "disposed kinda early"
         }
     t.Wait()
@@ -389,7 +389,7 @@ let testExceptionAttachedToTaskWithAwait() =
         task {
             ranA <- true
             failtest "uhoh"
-            do! unitTask <| Task.Delay(100)
+            do! Task.Delay(100)
             ranB <- true
         }
     require ranA "didn't run immediately"
@@ -574,21 +574,6 @@ let testTryOverReturnFrom() =
         }
     require (t.Result = 2) "didn't catch"
 
-let testUnitTaskWrapper() =
-    let failure = new TaskCompletionSource<obj>()
-    failure.SetException(TestException "test")
-    let untyped = failure.Task :> Task
-    let wrapped = (unitTask untyped).ToTypedTask()
-    let catcher =
-        task {
-            try
-                let! w = wrapped
-                return ()
-            with
-            | TestException "test" -> ()
-        }
-    catcher.Wait()
-
 [<EntryPoint>]
 let main argv =
     printfn "Running tests..."
@@ -621,7 +606,6 @@ let main argv =
         // or at least use O(n) heap. but small ones should at least function OK.
         testSmallTailRecursion()
         testTryOverReturnFrom()
-        testUnitTaskWrapper()
         printfn "Passed all tests!"
     with
     | exn ->
