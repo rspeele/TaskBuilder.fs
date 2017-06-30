@@ -572,6 +572,31 @@ let testTryOverReturnFrom() =
         }
     require (t.Result = 2) "didn't catch"
 
+// no need to call this, we just want to check that it compiles w/o warnings
+let testTrivialReturnCompiles (x : 'a) : 'a Task =
+    task {
+        do! Task.Yield()
+        return x
+    }
+
+// no need to call this, we just want to check that it compiles w/o warnings
+let testTrivialTransformedReturnCompiles (x : 'a) (f : 'a -> 'b) : 'b Task =
+    task {
+        do! Task.Yield()
+        return f x
+    }
+
+type ITaskThing =
+    abstract member Taskify : 'a option -> 'a Task
+
+// no need to call this, we just want to check that it compiles w/o warnings
+let testInterfaceUsageCompiles (iface : ITaskThing) (x : 'a) : 'a Task =
+    task {
+        let! xResult = iface.Taskify (Some x)
+        do! Task.Yield()
+        return xResult
+    }
+
 #nowarn "44" // we're going to use obsolete stuff here
 let testCompatibilityWithOldUnitTask() =
     let uTask =

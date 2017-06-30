@@ -76,19 +76,29 @@ module TaskBuilder =
     /// Used to return a value.
     let inline ret (x : 'a) = Return x
 
-    /// Bind anything that follows the "awaitable" pattern, same as the C# compiler expects.
-    let inline
-        bindGenericAwaitable< ^abl, ^awt, ^inp, ^out
+    type Binder<'out> =
+        // We put the output generic parameter up here at the class level, so it doesn't get subject to
+        // inline rules. If we put it all in the inline function, then the compiler gets confused at the
+        // below and demands that the whole function either is limited to working with (x : obj), or must
+        // be inline itself.
+        //
+        // let yieldThenReturn (x : 'a) =
+        //     task {
+        //         do! Task.Yield()
+        //         return x
+        //     }
+
+        static member inline GenericAwait< ^abl, ^awt, ^inp
                                                 when ^abl : (member GetAwaiter : unit -> ^awt)
                                                 and ^awt :> ICriticalNotifyCompletion 
                                                 and ^awt : (member get_IsCompleted : unit -> bool)
-                                                and ^awt : (member GetResult : unit -> ^inp) >
-        (abl : ^abl) (continuation : ^inp -> Step< ^out >) =
-        let awt = (^abl : (member GetAwaiter : unit -> ^awt)(abl)) // get an awaiter from the awaitable
-        if (^awt : (member get_IsCompleted : unit -> bool)(awt)) then // shortcut to continue immediately
-            continuation (^awt : (member GetResult : unit -> ^inp)(awt))
-        else
-            Await (awt, fun () -> continuation (^awt : (member GetResult : unit -> ^inp)(awt)))
+                                                and ^awt : (member GetResult : unit -> 'inp) >
+            (abl : ^abl, continuation : ^inp -> Step< ^out >) : Step< 'out > =
+                let awt = (^abl : (member GetAwaiter : unit -> ^awt)(abl)) // get an awaiter from the awaitable
+                if (^awt : (member get_IsCompleted : unit -> bool)(awt)) then // shortcut to continue immediately
+                    continuation (^awt : (member GetResult : unit -> ^inp)(awt))
+                else
+                    Await (awt, fun () -> continuation (^awt : (member GetResult : unit -> ^inp)(awt)))
 
     /// Special case of the above for `Task<'a>`. Have to write this out by hand to avoid confusing the compiler
     /// trying to decide between satisfying the constraints with `Task` or `Task<'a>`.
@@ -251,8 +261,8 @@ module TaskBuilder =
 
         // We have to have a dedicated overload for Task<'a> so the compiler doesn't get confused.
         // Everything else can use bindGenericAwaitable via an extension member (defined later).
-        member inline __.Bind(task : _ Task, continuation) =
-            bindGenericAwaitable (task.ConfigureAwait(continueOnCapturedContext = false)) continuation
+        member inline __.Bind(task : _ Task, continuation : _ -> 'a Step) : 'a Step =
+            Binder<'a>.GenericAwait(task.ConfigureAwait(continueOnCapturedContext = false), continuation)
 
 // Don't warn about our use of the "obsolete" module we just defined (see notes at start of file).
 #nowarn "44"
@@ -270,9 +280,9 @@ module ContextSensitive =
     // This is how we support binding arbitrary task-like types.
     type TaskBuilder.TaskBuilder with
         member inline this.ReturnFrom(taskLike) =
-            TaskBuilder.bindGenericAwaitable taskLike TaskBuilder.ret
-        member inline this.Bind(taskLike, continuation) =
-            TaskBuilder.bindGenericAwaitable taskLike continuation
+            TaskBuilder.Binder<_>.GenericAwait(taskLike, TaskBuilder.ret)
+        member inline this.Bind(taskLike, continuation : _ -> 'a TaskBuilder.Step) : 'a TaskBuilder.Step =
+            TaskBuilder.Binder<'a>.GenericAwait(taskLike, continuation)
 
 module ContextInsensitive =
     /// Builds a `System.Threading.Tasks.Task<'a>` similarly to a C# async/await method, but with
@@ -288,9 +298,9 @@ module ContextInsensitive =
     // This is how we support binding arbitrary task-like types.
     type TaskBuilder.ContextInsensitiveTaskBuilder with
         member inline this.ReturnFrom(taskLike) =
-            TaskBuilder.bindGenericAwaitable taskLike TaskBuilder.ret
-        member inline this.Bind(taskLike, continuation) =
-            TaskBuilder.bindGenericAwaitable taskLike continuation
+            TaskBuilder.Binder<_>.GenericAwait(taskLike, TaskBuilder.ret)
+        member inline this.Bind(taskLike, continuation : _ -> 'a TaskBuilder.Step) : 'a TaskBuilder.Step =
+            TaskBuilder.Binder<'a>.GenericAwait(taskLike, continuation)
     
     [<AutoOpen>]
     module HigherPriorityBinds =
@@ -298,7 +308,7 @@ module ContextInsensitive =
         type TaskBuilder.ContextInsensitiveTaskBuilder with
             member inline this.ReturnFrom(configurableTaskLike : ^tsk) =
                 let configured = (^tsk : (member ConfigureAwait : bool -> ^cfg)(configurableTaskLike, false))
-                TaskBuilder.bindGenericAwaitable configured TaskBuilder.ret
+                TaskBuilder.Binder<_>.GenericAwait(configured, TaskBuilder.ret)
             member inline this.Bind(configurableTaskLike : ^tsk, continuation) =
                 let configured = (^tsk : (member ConfigureAwait : bool -> ^cfg)(configurableTaskLike, false))
-                TaskBuilder.bindGenericAwaitable configured continuation
+                TaskBuilder.Binder<_>.GenericAwait(configured, continuation)
