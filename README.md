@@ -28,12 +28,12 @@ open FSharp.Control.Tasks
 type X() =
   static member WriteFile() =
     task {
-      do! unitTask <| Console.Out.WriteLineAsync("Enter a filename:")
+      do! Console.Out.WriteLineAsync("Enter a filename:")
       let! name = Console.In.ReadLineAsync()
       use file = File.CreateText(name)
       for i in Enumerable.Range(0, 100) do
-        do! unitTask <| file.WriteLineAsync(String.Format("hello {0}", i))
-      do! unitTask <| Console.Out.WriteLineAsync("Done")
+        do! file.WriteLineAsync(String.Format("hello {0}", i))
+      do! Console.Out.WriteLineAsync("Done")
       return name
     }
 ```
@@ -94,6 +94,19 @@ and don't need to interact with thread-unsafe things like Windows forms controls
 If you're not sure whether you want to use this version of the builder,
 reading [this MSDN article](https://msdn.microsoft.com/en-us/magazine/jj991977.aspx)
 may help.
+
+## What you can bind with let!
+
+As of 7a04419, you should be able to bind anything "awaitable" with `let!`.
+
+This basically means any type that has:
+
+* `task.GetAwaiter()`
+* `task.GetAwaiter().GetResult()`
+* `task.GetAwaiter().IsCompleted`
+
+When using `FSharp.Control.Tasks.ContextInsensitive`, you can also bind any type
+that has a `task.ConfigureAwait(false)` returning an "awaitable" type.
 
 ## Tail calls are not optimized
 
