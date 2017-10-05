@@ -1,8 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard1.6</TargetFramework>
-    <PackageVersion>1.0.0-pre1</PackageVersion>
-    <PackageId>fornever.TaskBuilder.fs</PackageId>
+    <PackageVersion>1.0.0</PackageVersion>
+    <PackageId>TaskBuilder.fs</PackageId>
     <Title>TaskBuilder.fs</Title>
     <Authors>ForNeVeR</Authors>
     <Description>F# computation expression builder for System.Threading.Tasks</Description>
