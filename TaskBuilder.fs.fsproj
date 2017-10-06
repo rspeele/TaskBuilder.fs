@@ -4,7 +4,7 @@
     <PackageVersion>1.0.0</PackageVersion>
     <PackageId>TaskBuilder.fs</PackageId>
     <Title>TaskBuilder.fs</Title>
-    <Authors>ForNeVeR</Authors>
+    <Authors>humbobst;ForNeVeR</Authors>
     <Description>F# computation expression builder for System.Threading.Tasks</Description>
     <PackageLicenseUrl>https://github.com/rspeele/TaskBuilder.fs/blob/7e11e86a05ce2c10d37ce25f23b06c3fdceae8e5/COPYING</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/rspeele/TaskBuilder.fs</PackageProjectUrl>
