@@ -572,6 +572,49 @@ let testTryOverReturnFrom() =
         }
     require (t.Result = 2) "didn't catch"
 
+let testTryFinallyOverReturnFromWithException() =
+    let inner() =
+        task {
+            do! Task.Yield()
+            failtest "inner"
+            return 1
+        }
+    let mutable m = 0
+    let t =
+        task {
+            try
+                do! Task.Yield()
+                return! inner()
+            finally
+                m <- 1
+        }
+    try
+        t.Wait()
+    with
+    | :? AggregateException -> ()
+    require (m = 1) "didn't run finally"
+
+let testTryFinallyOverReturnFromWithoutException() =
+    let inner() =
+        task {
+            do! Task.Yield()
+            return 1
+        }
+    let mutable m = 0
+    let t =
+        task {
+            try
+                do! Task.Yield()
+                return! inner()
+            finally
+                m <- 1
+        }
+    try
+        t.Wait()
+    with
+    | :? AggregateException -> ()
+    require (m = 1) "didn't run finally"
+
 // no need to call this, we just want to check that it compiles w/o warnings
 let testTrivialReturnCompiles (x : 'a) : 'a Task =
     task {
@@ -641,6 +684,8 @@ let main argv =
         // or at least use O(n) heap. but small ones should at least function OK.
         testSmallTailRecursion()
         testTryOverReturnFrom()
+        testTryFinallyOverReturnFromWithException()
+        testTryFinallyOverReturnFromWithoutException()
         testCompatibilityWithOldUnitTask()
         printfn "Passed all tests!"
     with
