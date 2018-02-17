@@ -119,15 +119,41 @@ builder), but _not_ with TaskBuilder.fs. As far as I know it is not possible to
 make this work with TPL tasks. C# async/await function are not tail-call
 optimized either, so at least this is consistent.
 
-TaskBuilder _does_ model tail calls specially, and the `AsyncMethodBuilder` it
-uses produces a `Task<Task<T>>`, where the inner task is the one in tail
-position, if any. When not tail calling, the inner task is
-`Task.FromResult(returnValue)`. It is just not possible to convert that
-`Task<Task<T>>` to a `Task<T>` without it using more memory with each iteration.
-If I'm wrong about this I would love an explanation.
+To implement loop that may iterate many time (or indefinitely), use a `while` loop
+instead of tail recursion.
 
-The current implementation uses `Task.Unwrap()`. On .NET framework on Windows,
-this uses O(n) heap memory and may reach an OutOfMemoryException, but does not
-stack overflow. On Mono, it stack overflows when the innermost task completes,
-running through the chain of callbacks to deliver the result outwards.
+For example:
+
+### DO &#10003;
+
+```fsharp
+let runPendingJobs() =
+    task {
+        let mutable anyPending = true
+        while anyPending do
+            let! jobToRun = checkForJob()
+            match jobToRun with
+            | None ->
+                anyPending <- false
+            | Some pendingJob ->
+                do! pendingJob()
+    }
+```
+
+### DON'T &#10006;
+
+```fsharp
+let rec runPendingJobs() =
+    task {
+        let! jobToRun = checkForJob()
+        match jobToRun with
+        | None ->
+            return ()
+        | Some pendingJob ->
+            do! pendingJob()
+            return! runPendingJobs()
+    }
+```
+
+
 
