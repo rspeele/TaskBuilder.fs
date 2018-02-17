@@ -250,7 +250,6 @@ module TaskBuilder =
         member inline __.Run(f : unit -> Step<'m>) = run f
         member inline __.Zero() = zero
         member inline __.Return(x) = ret x
-        member inline __.ReturnFrom(task : _ Task) = ReturnFrom task
         member inline __.Combine(step : unit Step, continuation) = combine step continuation
         member inline __.While(condition : unit -> bool, body : unit -> unit Step) = whileLoop condition body
         member inline __.For(sequence : _ seq, body : _ -> unit Step) = forLoop sequence body
@@ -262,8 +261,15 @@ module TaskBuilder =
 
         // We have to have a dedicated overload for Task<'a> so the compiler doesn't get confused.
         // Everything else can use bindGenericAwaitable via an extension member (defined later).
+        member inline __.ReturnFrom(task : _ Task) = ReturnFrom task
         member inline __.Bind(task : 'a Task, continuation : 'a -> 'b Step) : 'b Step =
             bindTask task continuation
+
+        // Convenience overloads for Asyncs.
+        member __.ReturnFrom(a : 'a Async) =
+            bindTask (Async.StartAsTask a) ret
+        member __.Bind(a : 'a Async, continuation : 'a -> 'b Step) : 'b Step =
+            bindTask (Async.StartAsTask a) continuation
 
     type ContextInsensitiveTaskBuilder() =
         // These methods are consistent between the two builders.
@@ -272,7 +278,6 @@ module TaskBuilder =
         member inline __.Run(f : unit -> Step<'m>) = run f
         member inline __.Zero() = zero
         member inline __.Return(x) = ret x
-        member inline __.ReturnFrom(task : _ Task) = ReturnFrom task
         member inline __.Combine(step : unit Step, continuation) = combine step continuation
         member inline __.While(condition : unit -> bool, body : unit -> unit Step) = whileLoop condition body
         member inline __.For(sequence : _ seq, body : _ -> unit Step) = forLoop sequence body
@@ -284,8 +289,15 @@ module TaskBuilder =
 
         // We have to have a dedicated overload for Task<'a> so the compiler doesn't get confused.
         // Everything else can use bindGenericAwaitable via an extension member (defined later).
+        member inline __.ReturnFrom(task : _ Task) = ReturnFrom task
         member inline __.Bind(task : 'a Task, continuation : 'a -> 'b Step) : 'b Step =
             bindTaskConfigureFalse task continuation
+
+        // Convenience overloads for Asyncs.
+        member __.ReturnFrom(a : 'a Async) =
+            bindTaskConfigureFalse (Async.StartAsTask a) ret
+        member __.Bind(a : 'a Async, continuation : 'a -> 'b Step) : 'b Step =
+            bindTaskConfigureFalse (Async.StartAsTask a) continuation
 
 // Don't warn about our use of the "obsolete" module we just defined (see notes at start of file).
 #nowarn "44"

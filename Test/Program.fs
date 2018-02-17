@@ -640,6 +640,21 @@ let testInterfaceUsageCompiles (iface : ITaskThing) (x : 'a) : 'a Task =
         return xResult
     }
 
+let testAsyncsMixedWithTasks() =
+    let t =
+        task {
+            do! Task.Delay(1)
+            do! Async.Sleep(1)
+            let! x =
+                async {
+                    do! Async.Sleep(1)
+                    return 5
+                }
+            return! async { return x + 3 }
+        }
+    let result = t.Result
+    require (result = 8) "something weird happened"
+
 #nowarn "44" // we're going to use obsolete stuff here
 let testCompatibilityWithOldUnitTask() =
     let uTask =
@@ -687,6 +702,7 @@ let main argv =
         testTryFinallyOverReturnFromWithException()
         testTryFinallyOverReturnFromWithoutException()
         testCompatibilityWithOldUnitTask()
+        testAsyncsMixedWithTasks()
         printfn "Passed all tests!"
     with
     | exn ->
