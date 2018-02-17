@@ -119,7 +119,7 @@ builder), but _not_ with TaskBuilder.fs. As far as I know it is not possible to
 make this work with TPL tasks. C# async/await function are not tail-call
 optimized either, so at least this is consistent.
 
-To implement loop that may iterate many time (or indefinitely), use a `while` loop
+To implement a loop that may iterate many times (or indefinitely), use a `while` loop
 instead of tail recursion.
 
 For example:
