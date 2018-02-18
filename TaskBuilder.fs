@@ -74,7 +74,7 @@ module TaskBuilder =
     let zero = Return ()
 
     /// Used to return a value.
-    let inline ret (x : 'a) = Return x
+    let ret (x : 'a) = Return x
 
     type Binder<'out> =
         // We put the output generic parameter up here at the class level, so it doesn't get subject to
@@ -112,7 +112,7 @@ module TaskBuilder =
 
     /// Special case of the above for `Task<'a>`. Have to write this out by hand to avoid confusing the compiler
     /// trying to decide between satisfying the constraints with `Task` or `Task<'a>`.
-    let inline bindTask (task : 'a Task) (continuation : 'a -> Step<'b>) =
+    let bindTask (task : 'a Task) (continuation : 'a -> Step<'b>) =
         let awt = task.GetAwaiter()
         if awt.IsCompleted then // Proceed to the next step based on the result we already have.
             continuation(awt.GetResult())
@@ -122,7 +122,7 @@ module TaskBuilder =
     /// Special case of the above for `Task<'a>`, for the context-insensitive builder.
     /// Have to write this out by hand to avoid confusing the compiler thinking our built-in bind method
     /// defined on the builder has fancy generic constraints on inp and out parameters.
-    let inline bindTaskConfigureFalse (task : 'a Task) (continuation : 'a -> Step<'b>) =
+    let bindTaskConfigureFalse (task : 'a Task) (continuation : 'a -> Step<'b>) =
         let awt = task.ConfigureAwait(false).GetAwaiter()
         if awt.IsCompleted then // Proceed to the next step based on the result we already have.
             continuation(awt.GetResult())
@@ -206,7 +206,7 @@ module TaskBuilder =
             Await (awaitable, fun () -> tryFinally next fin)
 
     /// Implements a using statement that disposes `disp` after `body` has completed.
-    let inline using (disp : #IDisposable) (body : _ -> Step<'a>) =
+    let using (disp : #IDisposable) (body : _ -> Step<'a>) =
         // A using statement is just a try/finally with the finally block disposing if non-null.
         tryFinally
             (fun () -> body disp)
@@ -276,16 +276,16 @@ module TaskBuilder =
     type TaskBuilder() =
         // These methods are consistent between the two builders.
         // Unfortunately, inline members do not work with inheritance.
-        member inline __.Delay(f : unit -> Step<_>) = f
-        member inline __.Run(f : unit -> Step<'m>) = run f
-        member inline __.Zero() = zero
-        member inline __.Return(x) = ret x
-        member inline __.Combine(step : unit Step, continuation) = combine step continuation
-        member inline __.While(condition : unit -> bool, body : unit -> unit Step) = whileLoop condition body
-        member inline __.For(sequence : _ seq, body : _ -> unit Step) = forLoop sequence body
-        member inline __.TryWith(body : unit -> _ Step, catch : exn -> _ Step) = tryWith body catch
-        member inline __.TryFinally(body : unit -> _ Step, fin : unit -> unit) = tryFinally body fin
-        member inline __.Using(disp : #IDisposable, body : #IDisposable -> _ Step) = using disp body
+        member __.Delay(f : unit -> Step<_>) = f
+        member __.Run(f : unit -> Step<'m>) = run f
+        member __.Zero() = zero
+        member __.Return(x) = ret x
+        member __.Combine(step : unit Step, continuation) = combine step continuation
+        member __.While(condition : unit -> bool, body : unit -> unit Step) = whileLoop condition body
+        member __.For(sequence : _ seq, body : _ -> unit Step) = forLoop sequence body
+        member __.TryWith(body : unit -> _ Step, catch : exn -> _ Step) = tryWith body catch
+        member __.TryFinally(body : unit -> _ Step, fin : unit -> unit) = tryFinally body fin
+        member __.Using(disp : #IDisposable, body : #IDisposable -> _ Step) = using disp body
         // End of consistent methods -- the following methods are different between
         // `TaskBuilder` and `ContextInsensitiveTaskBuilder`!
 
@@ -295,16 +295,16 @@ module TaskBuilder =
     type ContextInsensitiveTaskBuilder() =
         // These methods are consistent between the two builders.
         // Unfortunately, inline members do not work with inheritance.
-        member inline __.Delay(f : unit -> Step<_>) = f
-        member inline __.Run(f : unit -> Step<'m>) = run f
-        member inline __.Zero() = zero
-        member inline __.Return(x) = ret x
-        member inline __.Combine(step : unit Step, continuation) = combine step continuation
-        member inline __.While(condition : unit -> bool, body : unit -> unit Step) = whileLoop condition body
-        member inline __.For(sequence : _ seq, body : _ -> unit Step) = forLoop sequence body
-        member inline __.TryWith(body : unit -> _ Step, catch : exn -> _ Step) = tryWith body catch
-        member inline __.TryFinally(body : unit -> _ Step, fin : unit -> unit) = tryFinally body fin
-        member inline __.Using(disp : #IDisposable, body : #IDisposable -> _ Step) = using disp body
+        member __.Delay(f : unit -> Step<_>) = f
+        member __.Run(f : unit -> Step<'m>) = run f
+        member __.Zero() = zero
+        member __.Return(x) = ret x
+        member __.Combine(step : unit Step, continuation) = combine step continuation
+        member __.While(condition : unit -> bool, body : unit -> unit Step) = whileLoop condition body
+        member __.For(sequence : _ seq, body : _ -> unit Step) = forLoop sequence body
+        member __.TryWith(body : unit -> _ Step, catch : exn -> _ Step) = tryWith body catch
+        member __.TryFinally(body : unit -> _ Step, fin : unit -> unit) = tryFinally body fin
+        member __.Using(disp : #IDisposable, body : #IDisposable -> _ Step) = using disp body
         // End of consistent methods -- the following methods are different between
         // `TaskBuilder` and `ContextInsensitiveTaskBuilder`!
 
@@ -321,7 +321,7 @@ module ContextSensitive =
     let task = TaskBuilder.TaskBuilder()
 
     [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
-    let inline unitTask t = TaskBuilder.UnitTask(t)
+    let unitTask t = TaskBuilder.UnitTask(t)
 
 module ContextInsensitive =
     /// Builds a `System.Threading.Tasks.Task<'a>` similarly to a C# async/await method, but with
@@ -331,4 +331,4 @@ module ContextInsensitive =
     let task = TaskBuilder.ContextInsensitiveTaskBuilder()
 
     [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
-    let inline unitTask (t : Task) = t.ConfigureAwait(false)
+    let unitTask (t : Task) = t.ConfigureAwait(false)
