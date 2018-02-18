@@ -1,4 +1,4 @@
-﻿// TaskBuilder.fs - TPL task computation expressions for F#
+// TaskBuilder.fs - TPL task computation expressions for F#
 //
 // Written in 2016 by Robert Peele (humbobst@gmail.com)
 //
@@ -256,7 +256,10 @@ module TaskBuilder =
         member inline __.TryWith(body : unit -> _ Step, catch : exn -> _ Step) = tryWith body catch
         member inline __.TryFinally(body : unit -> _ Step, fin : unit -> unit) = tryFinally body fin
         member inline __.Using(disp : #IDisposable, body : #IDisposable -> _ Step) = using disp body
-        // End of consistent methods -- the following methods are different between
+
+    type ContextSensitiveTaskBuilder() =
+        inherit TaskBuilder()
+
         // `TaskBuilder` and `ContextInsensitiveTaskBuilder`!
 
         // We have to have a dedicated overload for Task<'a> so the compiler doesn't get confused.
@@ -272,19 +275,8 @@ module TaskBuilder =
             bindTask (Async.StartAsTask a) continuation
 
     type ContextInsensitiveTaskBuilder() =
-        // These methods are consistent between the two builders.
-        // Unfortunately, inline members do not work with inheritance.
-        member inline __.Delay(f : unit -> Step<_>) = f
-        member inline __.Run(f : unit -> Step<'m>) = run f
-        member inline __.Zero() = zero
-        member inline __.Return(x) = ret x
-        member inline __.Combine(step : unit Step, continuation) = combine step continuation
-        member inline __.While(condition : unit -> bool, body : unit -> unit Step) = whileLoop condition body
-        member inline __.For(sequence : _ seq, body : _ -> unit Step) = forLoop sequence body
-        member inline __.TryWith(body : unit -> _ Step, catch : exn -> _ Step) = tryWith body catch
-        member inline __.TryFinally(body : unit -> _ Step, fin : unit -> unit) = tryFinally body fin
-        member inline __.Using(disp : #IDisposable, body : #IDisposable -> _ Step) = using disp body
-        // End of consistent methods -- the following methods are different between
+        inherit TaskBuilder()
+
         // `TaskBuilder` and `ContextInsensitiveTaskBuilder`!
 
         // We have to have a dedicated overload for Task<'a> so the compiler doesn't get confused.
@@ -306,14 +298,14 @@ module TaskBuilder =
 module ContextSensitive =
     /// Builds a `System.Threading.Tasks.Task<'a>` similarly to a C# async/await method.
     /// Use this like `task { let! taskResult = someTask(); return taskResult.ToString(); }`.
-    let task = TaskBuilder.TaskBuilder()
+    let task = TaskBuilder.ContextSensitiveTaskBuilder()
 
     [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
     let inline unitTask t = TaskBuilder.UnitTask(t)
 
     // These are fallbacks when the Bind and ReturnFrom on the builder object itself don't apply.
     // This is how we support binding arbitrary task-like types.
-    type TaskBuilder.TaskBuilder with
+    type TaskBuilder.ContextSensitiveTaskBuilder with
         member inline this.ReturnFrom(taskLike) =
             TaskBuilder.Binder<_>.GenericAwait(taskLike, TaskBuilder.ret)
         member inline this.Bind(taskLike, continuation : _ -> 'a TaskBuilder.Step) : 'a TaskBuilder.Step =
