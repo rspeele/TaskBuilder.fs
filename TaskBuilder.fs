@@ -265,12 +265,6 @@ module TaskBuilder =
         member inline __.Bind(task : 'a Task, continuation : 'a -> 'b Step) : 'b Step =
             bindTask task continuation
 
-        // Convenience overloads for Asyncs.
-        member __.ReturnFrom(a : 'a Async) =
-            bindTask (Async.StartAsTask a) ret
-        member __.Bind(a : 'a Async, continuation : 'a -> 'b Step) : 'b Step =
-            bindTask (Async.StartAsTask a) continuation
-
     type ContextInsensitiveTaskBuilder() =
         // These methods are consistent between the two builders.
         // Unfortunately, inline members do not work with inheritance.
@@ -293,12 +287,6 @@ module TaskBuilder =
         member inline __.Bind(task : 'a Task, continuation : 'a -> 'b Step) : 'b Step =
             bindTaskConfigureFalse task continuation
 
-        // Convenience overloads for Asyncs.
-        member __.ReturnFrom(a : 'a Async) =
-            bindTaskConfigureFalse (Async.StartAsTask a) ret
-        member __.Bind(a : 'a Async, continuation : 'a -> 'b Step) : 'b Step =
-            bindTaskConfigureFalse (Async.StartAsTask a) continuation
-
 // Don't warn about our use of the "obsolete" module we just defined (see notes at start of file).
 #nowarn "44"
 
@@ -318,6 +306,11 @@ module ContextSensitive =
             TaskBuilder.Binder<_>.GenericAwait(taskLike, TaskBuilder.ret)
         member inline this.Bind(taskLike, continuation : _ -> 'a TaskBuilder.Step) : 'a TaskBuilder.Step =
             TaskBuilder.Binder<'a>.GenericAwait(taskLike, continuation)
+        // Convenience overloads for Asyncs.
+        member __.ReturnFrom(a : 'a Async) =
+            TaskBuilder.bindTask (Async.StartAsTask a) TaskBuilder.ret
+        member __.Bind(a : 'a Async, continuation : 'a -> 'b TaskBuilder.Step) : 'b TaskBuilder.Step =
+            TaskBuilder.bindTask (Async.StartAsTask a) continuation
 
 module ContextInsensitive =
     /// Builds a `System.Threading.Tasks.Task<'a>` similarly to a C# async/await method, but with
@@ -336,6 +329,12 @@ module ContextInsensitive =
             TaskBuilder.Binder<_>.GenericAwait(taskLike, TaskBuilder.ret)
         member inline this.Bind(taskLike, continuation : _ -> 'a TaskBuilder.Step) : 'a TaskBuilder.Step =
             TaskBuilder.Binder<'a>.GenericAwait(taskLike, continuation)
+            
+        // Convenience overloads for Asyncs.
+        member __.ReturnFrom(a : 'a Async) =
+            TaskBuilder.bindTaskConfigureFalse (Async.StartAsTask a) TaskBuilder.ret
+        member __.Bind(a : 'a Async, continuation : 'a -> 'b TaskBuilder.Step) : 'b TaskBuilder.Step =
+            TaskBuilder.bindTaskConfigureFalse (Async.StartAsTask a) continuation
     
     [<AutoOpen>]
     module HigherPriorityBinds =
