@@ -256,9 +256,8 @@ module TaskBuilder =
         static member        (>>=) (  Priority1, a  : 'a Async) = fun (k: 'a -> 'b Step) -> bindTask (Async.StartAsTask a) k     : 'b Step
 
     type ReturnFromS = Priority1 with
-        static member inline ($) (_:Priority2, taskLike    ) = Binder<_>.GenericAwait (taskLike, ret)
-        static member        ($) (  Priority1, task: _ Task) = ReturnFrom task
-        static member        ($) (  Priority1, a : 'a Async) = bindTask (Async.StartAsTask a) ret
+        static member inline ($) (Priority1, taskLike    ) = Binder<_>.GenericAwait (taskLike, ret)
+        static member        ($) (Priority1, a : 'a Async) = bindTask (Async.StartAsTask a) ret : Step<'a>
 
     type BindI = Priority1 with
         static member inline (>>=) (_:Priority3, taskLike            : 't) = fun (k :  _ -> 'b Step) -> Binder<'b>.GenericAwait (taskLike, k)                          : 'b Step
@@ -267,9 +266,8 @@ module TaskBuilder =
         static member        (>>=) (  Priority1, a   : 'a Async          ) = fun (k : 'a -> 'b Step) -> bindTaskConfigureFalse (Async.StartAsTask a) k                 : 'b Step
 
     type ReturnFromI = Priority1 with
-        static member inline ($) (_:Priority3, taskLike            ) = Binder<_>.GenericAwait(taskLike, ret)
-        static member inline ($) (_:Priority2, configurableTaskLike) = Binder<_>.GenericAwaitConfigureFalse(configurableTaskLike, ret)
-        static member        ($) (  Priority1, task: 'a Task       ) = ReturnFrom task
+        static member inline ($) (_:Priority2, taskLike            ) = Binder<_>.GenericAwait(taskLike, ret)
+        static member inline ($) (  Priority1, configurableTaskLike) = Binder<_>.GenericAwaitConfigureFalse(configurableTaskLike, ret)
         static member        ($) (  Priority1, a   : 'a Async      ) = bindTaskConfigureFalse (Async.StartAsTask a) ret
 
 
@@ -285,16 +283,10 @@ module TaskBuilder =
         member __.TryWith(body : unit -> _ Step, catch : exn -> _ Step) = tryWith body catch
         member __.TryFinally(body : unit -> _ Step, fin : unit -> unit) = tryFinally body fin
         member __.Using(disp : #IDisposable, body : #IDisposable -> _ Step) = using disp body
+        member __.ReturnFrom a : _ Step = ReturnFrom a
 
-    type ContextSensitiveTaskBuilder() = inherit TaskBuilder()
-    type ContextSensitiveTaskBuilder with
-        member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindS.Priority1 >>= task) continuation
-        member inline __.ReturnFrom a                              : 'b Step = ReturnFromS.Priority1 $ a
-
+    type ContextSensitiveTaskBuilder()   = inherit TaskBuilder()
     type ContextInsensitiveTaskBuilder() = inherit TaskBuilder()
-    type ContextInsensitiveTaskBuilder with
-        member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindI.Priority1 >>= task) continuation
-        member inline __.ReturnFrom a                              : 'b Step = ReturnFromI.Priority1 $ a
 
 // Don't warn about our use of the "obsolete" module we just defined (see notes at start of file).
 #nowarn "44"
@@ -308,6 +300,12 @@ module ContextSensitive =
     [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
     let unitTask t = TaskBuilder.UnitTask(t)
 
+    open TaskBuilder
+    type TaskBuilder with
+        member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindS.Priority1 >>= task) continuation
+        member inline __.ReturnFrom a                              : 'b Step = ReturnFromS.Priority1 $ a
+
+
 module ContextInsensitive =
     /// Builds a `System.Threading.Tasks.Task<'a>` similarly to a C# async/await method, but with
     /// all awaited tasks automatically configured *not* to resume on the captured context.
@@ -317,3 +315,8 @@ module ContextInsensitive =
 
     [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
     let unitTask (t : Task) = t.ConfigureAwait(false)
+
+    open TaskBuilder
+    type TaskBuilder with
+        member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindI.Priority1 >>= task) continuation
+        member inline __.ReturnFrom a                              : 'b Step = ReturnFromI.Priority1 $ a

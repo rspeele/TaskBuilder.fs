@@ -655,6 +655,17 @@ let testAsyncsMixedWithTasks() =
     let result = t.Result
     require (result = 8) "something weird happened"
 
+// no need to call this, we just want to check that it compiles w/o warnings
+let testDefaultInferenceForReturnFrom() =
+    let t = task { return Some "x" }
+    task {
+        let! r = t
+        if r = None then
+            return! failwithf "Could not find x" 
+        else
+            return r
+    }
+
 #nowarn "44" // we're going to use obsolete stuff here
 let testCompatibilityWithOldUnitTask() =
     let uTask =
