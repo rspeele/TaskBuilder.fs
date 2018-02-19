@@ -275,7 +275,6 @@ module TaskBuilder =
 
     type TaskBuilder() =
         // These methods are consistent between the two builders.
-        // Unfortunately, inline members do not work with inheritance.
         member __.Delay(f : unit -> Step<_>) = f
         member __.Run(f : unit -> Step<'m>) = run f
         member __.Zero() = zero
@@ -286,28 +285,14 @@ module TaskBuilder =
         member __.TryWith(body : unit -> _ Step, catch : exn -> _ Step) = tryWith body catch
         member __.TryFinally(body : unit -> _ Step, fin : unit -> unit) = tryFinally body fin
         member __.Using(disp : #IDisposable, body : #IDisposable -> _ Step) = using disp body
-        // End of consistent methods -- the following methods are different between
-        // `TaskBuilder` and `ContextInsensitiveTaskBuilder`!
 
+    type ContextSensitiveTaskBuilder() =
+        inherit TaskBuilder()
         member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindS.Priority1 $ task) continuation
         member inline __.ReturnFrom a                              : 'b Step = ReturnFromS.Priority1 $ a
 
     type ContextInsensitiveTaskBuilder() =
-        // These methods are consistent between the two builders.
-        // Unfortunately, inline members do not work with inheritance.
-        member __.Delay(f : unit -> Step<_>) = f
-        member __.Run(f : unit -> Step<'m>) = run f
-        member __.Zero() = zero
-        member __.Return(x) = ret x
-        member __.Combine(step : unit Step, continuation) = combine step continuation
-        member __.While(condition : unit -> bool, body : unit -> unit Step) = whileLoop condition body
-        member __.For(sequence : _ seq, body : _ -> unit Step) = forLoop sequence body
-        member __.TryWith(body : unit -> _ Step, catch : exn -> _ Step) = tryWith body catch
-        member __.TryFinally(body : unit -> _ Step, fin : unit -> unit) = tryFinally body fin
-        member __.Using(disp : #IDisposable, body : #IDisposable -> _ Step) = using disp body
-        // End of consistent methods -- the following methods are different between
-        // `TaskBuilder` and `ContextInsensitiveTaskBuilder`!
-
+        inherit TaskBuilder()
         member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindI.Priority1 $ task) continuation
         member inline __.ReturnFrom a                              : 'b Step = ReturnFromI.Priority1 $ a
 
@@ -318,7 +303,7 @@ module TaskBuilder =
 module ContextSensitive =
     /// Builds a `System.Threading.Tasks.Task<'a>` similarly to a C# async/await method.
     /// Use this like `task { let! taskResult = someTask(); return taskResult.ToString(); }`.
-    let task = TaskBuilder.TaskBuilder()
+    let task = TaskBuilder.ContextSensitiveTaskBuilder()
 
     [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
     let unitTask t = TaskBuilder.UnitTask(t)
