@@ -286,13 +286,13 @@ module TaskBuilder =
         member __.TryFinally(body : unit -> _ Step, fin : unit -> unit) = tryFinally body fin
         member __.Using(disp : #IDisposable, body : #IDisposable -> _ Step) = using disp body
 
-    type ContextSensitiveTaskBuilder() =
-        inherit TaskBuilder()
+    type ContextSensitiveTaskBuilder() = inherit TaskBuilder()
+    type ContextSensitiveTaskBuilder with
         member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindS.Priority1 $ task) continuation
         member inline __.ReturnFrom a                              : 'b Step = ReturnFromS.Priority1 $ a
 
-    type ContextInsensitiveTaskBuilder() =
-        inherit TaskBuilder()
+    type ContextInsensitiveTaskBuilder() = inherit TaskBuilder()
+    type ContextInsensitiveTaskBuilder with
         member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindI.Priority1 $ task) continuation
         member inline __.ReturnFrom a                              : 'b Step = ReturnFromI.Priority1 $ a
 
