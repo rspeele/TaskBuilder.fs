@@ -251,9 +251,9 @@ module TaskBuilder =
     type Priority2 = IComparable
 
     type BindS = Priority1 with
-        static member inline ($) (_:Priority2, taskLike : 't) = fun (k:  _ -> 'b Step) -> Binder<'b>.GenericAwait (taskLike, k): 'b Step
-        static member        ($) (  Priority1, task: 'a Task) = fun (k: 'a -> 'b Step) -> bindTask task k                      : 'b Step
-        static member        ($) (  Priority1, a  : 'a Async) = fun (k: 'a -> 'b Step) -> bindTask (Async.StartAsTask a) k     : 'b Step
+        static member inline (>>=) (_:Priority2, taskLike : 't) = fun (k:  _ -> 'b Step) -> Binder<'b>.GenericAwait (taskLike, k): 'b Step
+        static member        (>>=) (  Priority1, task: 'a Task) = fun (k: 'a -> 'b Step) -> bindTask task k                      : 'b Step
+        static member        (>>=) (  Priority1, a  : 'a Async) = fun (k: 'a -> 'b Step) -> bindTask (Async.StartAsTask a) k     : 'b Step
 
     type ReturnFromS = Priority1 with
         static member inline ($) (_:Priority2, taskLike    ) = Binder<_>.GenericAwait (taskLike, ret)
@@ -261,10 +261,10 @@ module TaskBuilder =
         static member        ($) (  Priority1, a : 'a Async) = bindTask (Async.StartAsTask a) ret
 
     type BindI = Priority1 with
-        static member inline ($) (_:Priority3, taskLike            : 't) = fun (k :  _ -> 'b Step) -> Binder<'b>.GenericAwait (taskLike, k)                          : 'b Step
-        static member inline ($) (_:Priority2, configurableTaskLike: 't) = fun (k :  _ -> 'b Step) -> Binder<'b>.GenericAwaitConfigureFalse (configurableTaskLike, k): 'b Step
-        static member        ($) (  Priority1, task: 'a Task           ) = fun (k : 'a -> 'b Step) -> bindTaskConfigureFalse task k                                  : 'b Step
-        static member        ($) (  Priority1, a   : 'a Async          ) = fun (k : 'a -> 'b Step) -> bindTaskConfigureFalse (Async.StartAsTask a) k                 : 'b Step
+        static member inline (>>=) (_:Priority3, taskLike            : 't) = fun (k :  _ -> 'b Step) -> Binder<'b>.GenericAwait (taskLike, k)                          : 'b Step
+        static member inline (>>=) (_:Priority2, configurableTaskLike: 't) = fun (k :  _ -> 'b Step) -> Binder<'b>.GenericAwaitConfigureFalse (configurableTaskLike, k): 'b Step
+        static member        (>>=) (  Priority1, task: 'a Task           ) = fun (k : 'a -> 'b Step) -> bindTaskConfigureFalse task k                                  : 'b Step
+        static member        (>>=) (  Priority1, a   : 'a Async          ) = fun (k : 'a -> 'b Step) -> bindTaskConfigureFalse (Async.StartAsTask a) k                 : 'b Step
 
     type ReturnFromI = Priority1 with
         static member inline ($) (_:Priority3, taskLike            ) = Binder<_>.GenericAwait(taskLike, ret)
@@ -288,12 +288,12 @@ module TaskBuilder =
 
     type ContextSensitiveTaskBuilder() = inherit TaskBuilder()
     type ContextSensitiveTaskBuilder with
-        member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindS.Priority1 $ task) continuation
+        member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindS.Priority1 >>= task) continuation
         member inline __.ReturnFrom a                              : 'b Step = ReturnFromS.Priority1 $ a
 
     type ContextInsensitiveTaskBuilder() = inherit TaskBuilder()
     type ContextInsensitiveTaskBuilder with
-        member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindI.Priority1 $ task) continuation
+        member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindI.Priority1 >>= task) continuation
         member inline __.ReturnFrom a                              : 'b Step = ReturnFromI.Priority1 $ a
 
 // Don't warn about our use of the "obsolete" module we just defined (see notes at start of file).
