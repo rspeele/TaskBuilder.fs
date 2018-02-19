@@ -1,3 +1,7 @@
+# v1.1.1
+
+* Moves overloads for `Async` into extension methods to help type infer `return! failwith ""`.
+
 # v1.1.0
 
 * Adds overloads for binding F# `Async`. This means `let!` works with `Async` as well as `Task` and other awaitables.
