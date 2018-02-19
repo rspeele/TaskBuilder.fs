@@ -285,38 +285,37 @@ module TaskBuilder =
         member __.Using(disp : #IDisposable, body : #IDisposable -> _ Step) = using disp body
         member __.ReturnFrom a : _ Step = ReturnFrom a
 
-    type ContextSensitiveTaskBuilder()   = inherit TaskBuilder()
-    type ContextInsensitiveTaskBuilder() = inherit TaskBuilder()
-
 // Don't warn about our use of the "obsolete" module we just defined (see notes at start of file).
 #nowarn "44"
 
 [<AutoOpen>]
 module ContextSensitive =
+    open TaskBuilder
+
     /// Builds a `System.Threading.Tasks.Task<'a>` similarly to a C# async/await method.
     /// Use this like `task { let! taskResult = someTask(); return taskResult.ToString(); }`.
-    let task = TaskBuilder.ContextSensitiveTaskBuilder()
+    let task = TaskBuilder()
 
     [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
     let unitTask t = TaskBuilder.UnitTask(t)
 
-    open TaskBuilder
     type TaskBuilder with
         member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindS.Priority1 >>= task) continuation
         member inline __.ReturnFrom a                              : 'b Step = ReturnFromS.Priority1 $ a
 
 
 module ContextInsensitive =
+    open TaskBuilder
+
     /// Builds a `System.Threading.Tasks.Task<'a>` similarly to a C# async/await method, but with
     /// all awaited tasks automatically configured *not* to resume on the captured context.
     /// This is often preferable when writing library code that is not context-aware, but undesirable when writing
     /// e.g. code that must interact with user interface controls on the same thread as its caller.
-    let task = TaskBuilder.ContextInsensitiveTaskBuilder()
+    let task = TaskBuilder()
 
     [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
     let unitTask (t : Task) = t.ConfigureAwait(false)
-
-    open TaskBuilder
+    
     type TaskBuilder with
         member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindI.Priority1 >>= task) continuation
         member inline __.ReturnFrom a                              : 'b Step = ReturnFromI.Priority1 $ a
