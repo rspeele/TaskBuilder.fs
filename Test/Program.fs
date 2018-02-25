@@ -678,6 +678,13 @@ let testCompatibilityWithOldUnitTask() =
     let r = uTask.Result
     require (r = 1) "weird result"
 
+// no need to call this, just check that it compiles
+let testCompilerInfersArgumentOfReturnFrom =
+    task {
+        if true then return 1
+        else return! failwith ""
+    }
+
 [<EntryPoint>]
 let main argv =
     printfn "Running tests..."

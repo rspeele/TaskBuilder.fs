@@ -1,4 +1,4 @@
-﻿// TaskBuilder.fs - TPL task computation expressions for F#
+// TaskBuilder.fs - TPL task computation expressions for F#
 //
 // Written in 2016 by Robert Peele (humbobst@gmail.com)
 //
@@ -303,7 +303,6 @@ module ContextSensitive =
         member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindS.Priority1 >>= task) continuation
         member inline __.ReturnFrom a                              : 'b Step = ReturnFromS.Priority1 $ a
 
-
 module ContextInsensitive =
     open TaskBuilder
 
@@ -313,7 +312,6 @@ module ContextInsensitive =
     /// e.g. code that must interact with user interface controls on the same thread as its caller.
     let task = TaskBuilder()
 
-    [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
     let unitTask (t : Task) = t.ConfigureAwait(false)
     
     type TaskBuilder with
