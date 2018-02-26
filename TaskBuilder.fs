@@ -235,15 +235,6 @@ module TaskBuilder =
             src.SetException(exn)
             src.Task
 
-    type UnitTask =
-        struct
-            val public Task : Task
-            new(task) = { Task = task }
-            member this.GetAwaiter() = this.Task.GetAwaiter()
-            member this.ConfigureAwait(continueOnCapturedContext) = this.Task.ConfigureAwait(continueOnCapturedContext)
-        end
-
-
     // We have to have a dedicated overload for Task<'a> so the compiler doesn't get confused with Convenience overloads for Asyncs
     // Everything else can use bindGenericAwaitable via an extension member
 
@@ -297,7 +288,7 @@ module ContextSensitive =
     let task = TaskBuilder()
 
     [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
-    let unitTask t = TaskBuilder.UnitTask(t)
+    let unitTask (t : Task) = t
 
     type TaskBuilder with
         member inline __.Bind (task, continuation : 'a -> 'b Step) : 'b Step = (BindS.Priority1 >>= task) continuation
@@ -312,6 +303,7 @@ module ContextInsensitive =
     /// e.g. code that must interact with user interface controls on the same thread as its caller.
     let task = TaskBuilder()
 
+    [<Obsolete("It is no longer necessary to wrap untyped System.Thread.Tasks.Task objects with \"unitTask\".")>]
     let unitTask (t : Task) = t.ConfigureAwait(false)
     
     type TaskBuilder with
