@@ -1,3 +1,8 @@
+# v1.2.0-rc
+
+* Support for .NET frameworks 4.5, 4.6, and 4.7 in NuGet package.
+* New operator-based overload resolution for F# 4.0 compatibility by Gustavo Leon.
+
 # v1.1.0
 
 * Adds overloads for binding F# `Async`. This means `let!` works with `Async` as well as `Task` and other awaitables.
