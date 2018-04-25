@@ -41,10 +41,10 @@ type X() =
 Should work exactly the same as this C# method:
 
 ```csharp
-using System
-using System.IO
-using System.Linq
-using System.Threading.Tasks
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 
 class X
 {
