@@ -11,7 +11,7 @@
     <AssemblyName>TestValueTask</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-    <TargetFSharpCoreVersion>4.4.1.0</TargetFSharpCoreVersion>
+    <TargetFSharpCoreVersion>4.4.3.0</TargetFSharpCoreVersion>
     <Name>TestValueTask</Name>
     <TargetFrameworkProfile />
   </PropertyGroup>
@@ -49,7 +49,7 @@
     </When>
     <Otherwise>
       <PropertyGroup Condition=" '$(FSharpTargetsPath)' == '' AND Exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\FSharp\Microsoft.FSharp.Targets') ">
-        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\FSharp\Microsoft.FSharp.Targets</FSharpTargetsPath>
+        <FSharpTargetsPath>C:\Users\peeler\AppData\Local\Microsoft\VisualStudio\15.0_423c6351\Extensions\4hf10ccn.lsl\Microsoft.FSharp.targets</FSharpTargetsPath>
       </PropertyGroup>
     </Otherwise>
   </Choose>
