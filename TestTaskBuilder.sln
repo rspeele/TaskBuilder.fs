@@ -18,6 +18,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BenchmarkCS", "BenchmarkCS\
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "TestValueTask", "TestValueTask\TestValueTask.fsproj", "{D4FE81B6-4E7E-47D9-A84A-1C92837FFDA8}"
 EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "TaskBuilder.fs", "TaskBuilder.fs.fsproj", "{AD00107E-13C3-4706-A06F-24C75FC3FBFF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -40,6 +42,10 @@ Global
 		{D4FE81B6-4E7E-47D9-A84A-1C92837FFDA8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D4FE81B6-4E7E-47D9-A84A-1C92837FFDA8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D4FE81B6-4E7E-47D9-A84A-1C92837FFDA8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AD00107E-13C3-4706-A06F-24C75FC3FBFF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AD00107E-13C3-4706-A06F-24C75FC3FBFF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AD00107E-13C3-4706-A06F-24C75FC3FBFF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AD00107E-13C3-4706-A06F-24C75FC3FBFF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
