@@ -16,4 +16,7 @@
   <ItemGroup>
     <Compile Include="TaskBuilder.fs" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.1.17" />
+  </ItemGroup>
 </Project>
