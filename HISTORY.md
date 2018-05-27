@@ -1,3 +1,8 @@
+# V2.0.0
+
+* All features from V1.2.0, but with new builders moved to FSharp.Control.Tasks.V2 namespace to avoid dependency conflicts.
+* Target lowest FSharp.Core that supports .NET Standard 1.6.
+
 # v1.2.0-rc
 
 * Support for .NET frameworks 4.5, 4.6, and 4.7 in NuGet package.

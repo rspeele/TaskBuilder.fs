@@ -23,7 +23,7 @@ For example, this F# method:
 open System
 open System.IO
 open System.Linq
-open FSharp.Control.Tasks
+open FSharp.Control.Tasks.V2
 
 type X() =
   static member WriteFile() =
@@ -82,11 +82,11 @@ of the code.
 The other files are tests which you do not need to copy (but again,
 you are free to do so).
 
-Note that by default, if you open `FSharp.Control.Tasks`, you'll get
+Note that by default, if you open `FSharp.Control.Tasks.V2`, you'll get
 a `task { ... }` builder that behaves as closely to C#'s async methods as possible.
 
 However, I have also included a version of the `task { ... }` builder under
-`FSharp.Control.Tasks.ContextInsensitive` which makes one minor change: it will
+`FSharp.Control.Tasks.V2.ContextInsensitive` which makes one minor change: it will
 automatically call `task.ConfigureAwait(false)` on every task you await.
 
 This can improve performance if you're writing library code or server-side code
@@ -155,5 +155,17 @@ let rec runPendingJobs() =
     }
 ```
 
+## What's the deal with the V2 module?
 
+For a while, TaskBuilder.fs depended on a compiler behavior that was introduced in F# 4.1.
+
+It wouldn't work with older compiler versions -- more accurately, it would work, but would be unpleasant to use
+because types would have to be explicitly annotated everywhere.
+
+Thankfully, @gusty rewrote the builder classes and extension methods to work with all F# compiler versions.
+
+But DLLs compiled using the old builder couldn't use the new builder code, since beneath the inline methods,
+there is a completely different set of classes and methods involved.
+
+Therefore, the old code is still included for binary-compatibility, while the new code lives under the V2 namespace.
 
