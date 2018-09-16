@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/rspeele/TaskBuilder.fs.svg?branch=master)](https://travis-ci.org/rspeele/TaskBuilder.fs) [![NuGet](https://img.shields.io/nuget/v/TaskBuilder.fs.svg)](https://www.nuget.org/packages/TaskBuilder.fs/)
+[![NuGet](https://img.shields.io/nuget/v/TaskBuilder.fs.svg)](https://www.nuget.org/packages/TaskBuilder.fs/)
 
 ## About
 
