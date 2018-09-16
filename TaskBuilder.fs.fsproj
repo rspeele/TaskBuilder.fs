@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard1.6;net45;net46;net47</TargetFrameworks>
-    <PackageVersion>2.0.0</PackageVersion>
+    <PackageVersion>2.1.0</PackageVersion>
     <PackageId>TaskBuilder.fs</PackageId>
     <Title>TaskBuilder.fs</Title>
     <Authors>humbobst;ForNeVeR</Authors>
