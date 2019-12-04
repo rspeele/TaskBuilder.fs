@@ -1,3 +1,11 @@
+# v2.2.0
+
+* Support for .NET Standard 2.0
+
+# v2.1.0
+
+* Enable source link
+
 # V2.0.0
 
 * All features from V1.2.0, but with new builders moved to FSharp.Control.Tasks.V2 namespace to avoid dependency conflicts.
