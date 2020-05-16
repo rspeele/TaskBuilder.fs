@@ -272,6 +272,10 @@ module TaskBuilder =
         member __.Combine(step : unit Step, continuation) = combine step continuation
         member __.While(condition : unit -> bool, body : unit -> unit Step) = whileLoop condition body
         member __.For(sequence : _ seq, body : _ -> unit Step) = forLoop sequence body
+        member inline _.For (sequence: ^a, body: 'b -> unit Step) =
+            let mutable e = ( ^a : (member GetEnumerator: unit -> ^Enumerator) sequence)
+            let moveNext () = ( ^Enumerator : (member MoveNext: unit -> bool) e )
+            whileLoop moveNext (fun _ -> body ( ^Enumerator : (member Current: 'b) e))
         member __.TryWith(body : unit -> _ Step, catch : exn -> _ Step) = tryWith body catch
         member __.TryFinally(body : unit -> _ Step, fin : unit -> unit) = tryFinally body fin
         member __.Using(disp : #IDisposable, body : #IDisposable -> _ Step) = using disp body
