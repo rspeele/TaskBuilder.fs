@@ -66,11 +66,6 @@ module TaskBuilder =
                     methodBuilder.AwaitUnsafeOnCompleted(&await, &self)    
             member __.SetStateMachine(_) = () // Doesn't really apply since we're a reference type.
 
-    let unwrapException (agg : AggregateException) =
-        let inners = agg.InnerExceptions
-        if inners.Count = 1 then inners.[0]
-        else agg :> Exception
-
     /// Used to represent no-ops like the implicit empty "else" branch of an "if" expression.
     let zero = Return ()
 
