@@ -1,4 +1,10 @@
-[![NuGet](https://img.shields.io/nuget/v/TaskBuilder.fs.svg)](https://www.nuget.org/packages/TaskBuilder.fs/)
+# Important Note: Obsolete
+
+Since [F# 6](https://learn.microsoft.com/en-us/dotnet/fsharp/whats-new/fsharp-6), released in Nov 2021, `task {}` has
+been [built into F# Core](https://github.com/fsharp/fslang-design/blob/main/FSharp-6.0/FS-1097-task-builder.md). The
+interface and tests of TaskBuilder.fs influenced the F# 6 design, and it is 99% a drop-in replacement. For this reason
+there is no reason to use this library in modern code, and it has not been maintained. The code may still be of interest
+as a reference for computation expression builders, but is not necessary as a dependency for any downstream F# projects.
 
 ## About
 
